@@ -1,22 +1,37 @@
-/* Shared Fluent / Windows Media Creation Tool visual tokens for GTK apps */
+/* Shared Fluent / Windows Media Creation Tool design system for GTK apps */
 #ifndef UF_THEME_H
 #define UF_THEME_H
 
 #include <gtk/gtk.h>
+#include <string.h>
 
 static const char *UF_FLUENT_CSS =
+    "@keyframes uf-fade-in {"
+    "  from { opacity: 0; }"
+    "  to   { opacity: 1; }"
+    "}"
+    "@keyframes uf-progress-glow {"
+    "  0%   { background-color: #0078d4; }"
+    "  50%  { background-color: #2b88d8; }"
+    "  100% { background-color: #0078d4; }"
+    "}"
+    "@keyframes uf-pulse-dot {"
+    "  0%, 100% { opacity: 1; }"
+    "  50%      { opacity: 0.45; }"
+    "}"
     "window, .uf-root {"
     "  background-color: #ffffff;"
     "  color: #1b1b1b;"
     "  font-family: 'Segoe UI', 'Segoe UI Variable', 'Cantarell', 'Ubuntu', sans-serif;"
     "  font-size: 14px;"
     "}"
-    /* Top product chrome — solid Windows blue like MCT / Setup */
+    /* Product chrome */
     ".uf-header {"
     "  background-color: #0078d4;"
     "  color: #ffffff;"
     "  padding: 0 20px;"
     "  min-height: 48px;"
+    "  border-bottom: 3px solid #005a9e;"
     "}"
     ".uf-header label {"
     "  color: #ffffff;"
@@ -29,12 +44,50 @@ static const char *UF_FLUENT_CSS =
     "  font-size: 12px;"
     "  font-weight: 400;"
     "}"
-    /* Main content plane */
+    /* Step rail under header */
+    ".uf-steps {"
+    "  background-color: #f8f8f8;"
+    "  border-bottom: 1px solid #e5e5e5;"
+    "  padding: 10px 40px;"
+    "}"
+    ".uf-step-item {"
+    "  color: #a19f9d;"
+    "  font-size: 12px;"
+    "  font-weight: 600;"
+    "  letter-spacing: 0.2px;"
+    "}"
+    ".uf-step-item.uf-step-on {"
+    "  color: #0078d4;"
+    "}"
+    ".uf-step-item.uf-step-done {"
+    "  color: #107c10;"
+    "}"
+    ".uf-step-sep {"
+    "  color: #c8c6c4;"
+    "  font-size: 12px;"
+    "  padding: 0 10px;"
+    "}"
+    ".uf-step-dot {"
+    "  color: #c8c6c4;"
+    "  font-size: 11px;"
+    "  margin-right: 6px;"
+    "}"
+    ".uf-step-dot.uf-step-on {"
+    "  color: #0078d4;"
+    "  animation: uf-pulse-dot 1.6s ease-in-out infinite;"
+    "}"
+    ".uf-step-dot.uf-step-done {"
+    "  color: #107c10;"
+    "  animation: none;"
+    "}"
+    /* Content */
     ".uf-content {"
     "  background-color: #ffffff;"
     "  padding: 28px 40px 20px 40px;"
     "}"
-    /* Footer chrome — light grey strip with hairline */
+    ".uf-reveal {"
+    "  animation: uf-fade-in 260ms ease-out;"
+    "}"
     ".uf-footer {"
     "  background-color: #f3f3f3;"
     "  border-top: 1px solid #e5e5e5;"
@@ -62,13 +115,35 @@ static const char *UF_FLUENT_CSS =
     "  font-size: 13px;"
     "  font-weight: 600;"
     "}"
-    ".uf-link {"
-    "  color: #0078d4;"
+    ".uf-warn {"
+    "  color: #8a6116;"
+    "  background-color: #fff4ce;"
+    "  border: 1px solid #f0e2a4;"
+    "  border-radius: 2px;"
+    "  padding: 10px 12px;"
     "  font-size: 13px;"
+    "}"
+    ".uf-success-banner {"
+    "  color: #0b6a0b;"
+    "  background-color: #dff6dd;"
+    "  border: 1px solid #9fd89f;"
+    "  border-radius: 2px;"
+    "  padding: 12px 14px;"
+    "  font-size: 14px;"
+    "  font-weight: 600;"
+    "}"
+    ".uf-error-banner {"
+    "  color: #a4262c;"
+    "  background-color: #fde7e9;"
+    "  border: 1px solid #f1aeb5;"
+    "  border-radius: 2px;"
+    "  padding: 12px 14px;"
+    "  font-size: 14px;"
+    "  font-weight: 600;"
     "}"
     ".uf-status { color: #605e5c; font-size: 13px; }"
     "label { color: #1b1b1b; }"
-    /* Inputs — Fluent outline */
+    /* Inputs */
     "entry, combobox, combobox button.combo {"
     "  background-color: #ffffff;"
     "  color: #1b1b1b;"
@@ -76,13 +151,16 @@ static const char *UF_FLUENT_CSS =
     "  border-radius: 2px;"
     "  min-height: 32px;"
     "  padding: 4px 10px;"
-    "  box-shadow: none;"
+    "  transition: border-color 120ms ease, background-color 120ms ease;"
     "}"
     "entry:focus, combobox:focus {"
     "  border-color: #0078d4;"
     "  border-width: 2px;"
     "}"
-    /* Default / secondary buttons */
+    "entry:hover, combobox:hover {"
+    "  border-color: #323130;"
+    "}"
+    /* Buttons */
     "button {"
     "  background-image: none;"
     "  background-color: #ffffff;"
@@ -94,18 +172,20 @@ static const char *UF_FLUENT_CSS =
     "  font-size: 14px;"
     "  min-height: 32px;"
     "  min-width: 88px;"
-    "  box-shadow: none;"
+    "  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;"
     "}"
     "button:hover {"
     "  background-color: #f5f5f5;"
     "  border-color: #323130;"
+    "}"
+    "button:active {"
+    "  background-color: #edebe9;"
     "}"
     "button:disabled {"
     "  background-color: #f3f3f3;"
     "  color: #a19f9d;"
     "  border-color: #e1dfdd;"
     "}"
-    /* Primary action (Next / Accept / Create) */
     "button.uf-primary {"
     "  background-color: #0078d4;"
     "  color: #ffffff;"
@@ -115,6 +195,10 @@ static const char *UF_FLUENT_CSS =
     "button.uf-primary:hover {"
     "  background-color: #106ebe;"
     "  border-color: #106ebe;"
+    "  color: #ffffff;"
+    "}"
+    "button.uf-primary:active {"
+    "  background-color: #005a9e;"
     "  color: #ffffff;"
     "}"
     "button.uf-primary:disabled {"
@@ -128,7 +212,6 @@ static const char *UF_FLUENT_CSS =
     "  border-color: #d13438;"
     "}"
     "button.uf-danger:hover { background-color: #a4262c; color: #ffffff; }"
-    /* Quiet text-style actions in content */
     "button.uf-linkbtn {"
     "  background-color: transparent;"
     "  border: none;"
@@ -142,13 +225,14 @@ static const char *UF_FLUENT_CSS =
     "  color: #004578;"
     "  text-decoration: underline;"
     "}"
-    /* MCT-style selectable option tiles */
+    /* Option tiles */
     ".uf-option {"
     "  background-color: #ffffff;"
     "  border: 1px solid #e1e1e1;"
     "  border-radius: 2px;"
     "  padding: 14px 16px;"
     "  margin: 6px 0;"
+    "  transition: background-color 160ms ease, border-color 160ms ease;"
     "}"
     ".uf-option:hover {"
     "  background-color: #f3f9fd;"
@@ -176,10 +260,14 @@ static const char *UF_FLUENT_CSS =
     "  padding: 16px 18px;"
     "  min-height: 64px;"
     "  font-weight: 600;"
+    "  transition: background-color 160ms ease, border-color 160ms ease;"
     "}"
     "button.uf-choice:hover {"
     "  background-color: #f3f9fd;"
     "  border-color: #0078d4;"
+    "}"
+    "button.uf-choice:active {"
+    "  background-color: #deecf9;"
     "}"
     "radiobutton {"
     "  padding: 2px 0;"
@@ -190,13 +278,14 @@ static const char *UF_FLUENT_CSS =
     "  background-color: #ffffff;"
     "  min-width: 18px;"
     "  min-height: 18px;"
+    "  transition: background-color 120ms ease, border-color 120ms ease;"
     "}"
     "radiobutton:checked indicator {"
     "  background-color: #0078d4;"
     "  border-color: #0078d4;"
     "  color: #ffffff;"
     "}"
-    /* License / notice box */
+    /* Surfaces */
     ".uf-license {"
     "  background-color: #faf9f8;"
     "  border: 1px solid #e1e1e1;"
@@ -230,12 +319,24 @@ static const char *UF_FLUENT_CSS =
     "  background-color: #edebe9;"
     "  border: none;"
     "  border-radius: 0;"
-    "  min-height: 4px;"
+    "  min-height: 6px;"
     "}"
     "progressbar progress {"
     "  background-color: #0078d4;"
     "  border-radius: 0;"
-    "  min-height: 4px;"
+    "  min-height: 6px;"
+    "  transition: all 180ms ease;"
+    "}"
+    "progressbar.uf-busy progress {"
+    "  animation: uf-progress-glow 1.4s ease-in-out infinite;"
+    "}"
+    "progressbar.uf-done progress {"
+    "  background-color: #107c10;"
+    "  animation: none;"
+    "}"
+    "progressbar.uf-fail progress {"
+    "  background-color: #d13438;"
+    "  animation: none;"
     "}"
     "treeview {"
     "  background-color: #ffffff;"
@@ -245,6 +346,13 @@ static const char *UF_FLUENT_CSS =
     ".uf-progress-hero {"
     "  font-size: 16px;"
     "  color: #1b1b1b;"
+    "  font-weight: 600;"
+    "}"
+    ".uf-spinner-label {"
+    "  color: #0078d4;"
+    "  font-size: 13px;"
+    "  font-weight: 600;"
+    "  animation: uf-pulse-dot 1.2s ease-in-out infinite;"
     "}";
 
 static void uf_apply_fluent_theme(void)
@@ -256,6 +364,19 @@ static void uf_apply_fluent_theme(void)
         GTK_STYLE_PROVIDER(provider),
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_object_unref(provider);
+}
+
+static void uf_reveal(GtkWidget *w)
+{
+    GtkStyleContext *ctx;
+    if (!w)
+        return;
+    ctx = gtk_widget_get_style_context(w);
+    gtk_style_context_remove_class(ctx, "uf-reveal");
+    /* Force restart of CSS animation */
+    gtk_widget_hide(w);
+    gtk_style_context_add_class(ctx, "uf-reveal");
+    gtk_widget_show(w);
 }
 
 static GtkWidget *uf_primary_button(const char *label)
@@ -280,7 +401,7 @@ static GtkWidget *uf_link_button(const char *label)
     return b;
 }
 
-static GtkWidget *uf_header_bar(const char *title)
+static GtkWidget *__attribute__((unused)) uf_header_bar(const char *title)
 {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
     GtkWidget *lbl = gtk_label_new(title);
@@ -293,7 +414,7 @@ static GtkWidget *uf_header_bar(const char *title)
     return box;
 }
 
-static GtkWidget *uf_header_bar_versioned(const char *title, const char *version)
+static GtkWidget *__attribute__((unused)) uf_header_bar_versioned(const char *title, const char *version)
 {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
     GtkWidget *lbl = gtk_label_new(title);
@@ -328,7 +449,7 @@ static GtkWidget *uf_subtitle_label(const char *text)
     return lbl;
 }
 
-static GtkWidget *uf_eyebrow_label(const char *text)
+static GtkWidget *__attribute__((unused)) uf_eyebrow_label(const char *text)
 {
     GtkWidget *lbl = gtk_label_new(text);
     gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "uf-eyebrow");
@@ -336,7 +457,73 @@ static GtkWidget *uf_eyebrow_label(const char *text)
     return lbl;
 }
 
-/* MCT-style option row: radio + bold title + muted description inside a tile */
+typedef struct {
+    GtkWidget *bar;
+    GtkWidget *items[8];
+    GtkWidget *dots[8];
+    int count;
+    int active;
+} UfStepRail;
+
+static GtkWidget *uf_step_rail_new(UfStepRail *rail, const char **labels, int count)
+{
+    int i;
+    memset(rail, 0, sizeof(*rail));
+    rail->bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_style_context_add_class(gtk_widget_get_style_context(rail->bar), "uf-steps");
+    rail->count = count > 8 ? 8 : count;
+
+    for (i = 0; i < rail->count; i++) {
+        GtkWidget *cell = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+        GtkWidget *dot = gtk_label_new("●");
+        GtkWidget *lbl = gtk_label_new(labels[i]);
+
+        gtk_style_context_add_class(gtk_widget_get_style_context(dot), "uf-step-dot");
+        gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "uf-step-item");
+        gtk_widget_set_valign(dot, GTK_ALIGN_CENTER);
+        gtk_widget_set_valign(lbl, GTK_ALIGN_CENTER);
+
+        gtk_box_pack_start(GTK_BOX(cell), dot, FALSE, FALSE, 0);
+        gtk_box_pack_start(GTK_BOX(cell), lbl, FALSE, FALSE, 0);
+        gtk_box_pack_start(GTK_BOX(rail->bar), cell, FALSE, FALSE, 0);
+
+        if (i + 1 < rail->count) {
+            GtkWidget *sep = gtk_label_new("——");
+            gtk_style_context_add_class(gtk_widget_get_style_context(sep), "uf-step-sep");
+            gtk_box_pack_start(GTK_BOX(rail->bar), sep, FALSE, FALSE, 0);
+        }
+
+        rail->items[i] = lbl;
+        rail->dots[i] = dot;
+    }
+    rail->active = -1;
+    return rail->bar;
+}
+
+static void uf_step_rail_set(UfStepRail *rail, int active)
+{
+    int i;
+    if (!rail || !rail->bar)
+        return;
+    rail->active = active;
+    for (i = 0; i < rail->count; i++) {
+        GtkStyleContext *lc = gtk_widget_get_style_context(rail->items[i]);
+        GtkStyleContext *dc = gtk_widget_get_style_context(rail->dots[i]);
+        gtk_style_context_remove_class(lc, "uf-step-on");
+        gtk_style_context_remove_class(lc, "uf-step-done");
+        gtk_style_context_remove_class(dc, "uf-step-on");
+        gtk_style_context_remove_class(dc, "uf-step-done");
+        if (i < active) {
+            gtk_style_context_add_class(lc, "uf-step-done");
+            gtk_style_context_add_class(dc, "uf-step-done");
+        } else if (i == active) {
+            gtk_style_context_add_class(lc, "uf-step-on");
+            gtk_style_context_add_class(dc, "uf-step-on");
+        }
+    }
+}
+
+/* MCT-style option row */
 static GtkWidget *uf_option_tile(GtkRadioButton *group,
                                  const char *title,
                                  const char *desc,

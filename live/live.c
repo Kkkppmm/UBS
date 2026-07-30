@@ -47,8 +47,12 @@ static void set_result(const char *text)
 
 static void on_show_page(GtkButton *btn, gpointer user_data)
 {
+    GtkWidget *page;
     (void)btn;
     gtk_stack_set_visible_child_name(GTK_STACK(app.stack), (const char *)user_data);
+    page = gtk_stack_get_visible_child(GTK_STACK(app.stack));
+    if (page)
+        uf_reveal(page);
 }
 
 static void refresh_devices(void)
@@ -731,8 +735,8 @@ static void activate(GtkApplication *gtk_app, gpointer user_data)
     gtk_style_context_add_class(gtk_widget_get_style_context(content), "uf-content");
 
     app.stack = gtk_stack_new();
-    gtk_stack_set_transition_type(GTK_STACK(app.stack), GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
-    gtk_stack_set_transition_duration(GTK_STACK(app.stack), 180);
+    gtk_stack_set_transition_type(GTK_STACK(app.stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
+    gtk_stack_set_transition_duration(GTK_STACK(app.stack), 220);
     gtk_stack_add_named(GTK_STACK(app.stack), build_home(), "home");
     gtk_stack_add_named(GTK_STACK(app.stack), build_devices(), "devices");
     gtk_stack_add_named(GTK_STACK(app.stack), build_results(), "results");

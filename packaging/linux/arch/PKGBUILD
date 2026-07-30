@@ -1,6 +1,6 @@
 # Maintainer: USBForge Contributors
 pkgname=usbforge
-pkgver=1.3.0
+pkgver=1.4.0
 pkgrel=1
 pkgdesc="Bootable ISO builder and Live USB Lab"
 arch=('x86_64')
