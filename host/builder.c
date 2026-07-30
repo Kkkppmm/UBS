@@ -252,31 +252,46 @@ static char *selected_usb_path(void)
 static void on_build_iso(void)
 {
     const char *iso;
+    const char *script;
     char cmd[USBFORGE_MAX_PATH * 3];
 
     iso = gtk_entry_get_text(GTK_ENTRY(app.iso_entry));
     if (!iso || !*iso) {
-        append_log("Please choose an output ISO path first.");
+        append_log("Please choose an output ISO path first (example: ~/usbforge.iso).");
         return;
     }
-    if (uf_file_exists("scripts/build-iso.sh"))
-        snprintf(cmd, sizeof(cmd), "bash scripts/build-iso.sh \"%s\"", iso);
-    else if (uf_file_exists("/usbforge/scripts/build-iso.sh"))
-        snprintf(cmd, sizeof(cmd), "bash /usbforge/scripts/build-iso.sh \"%s\"", iso);
-    else
-        snprintf(cmd, sizeof(cmd), "bash scripts/build-iso.sh \"%s\"", iso);
 
-    start_job(cmd, "ISO created successfully. You can write it to a USB drive next.",
-              "ISO build failed. Check the log and dependencies (xorriso, grub).");
+    /* Don't overwrite an existing Windows/other ISO by "building" into it */
+    if (uf_file_exists(iso) && uf_iso_is_windows(iso)) {
+        append_log("That file is an existing Windows ISO.");
+        append_log("To make a bootable USB from it: go Back, choose "
+                   "'Write an existing ISO to USB flash drive', then Create.");
+        append_log("To build a NEW USBForge ISO, pick a different output path "
+                   "like ~/Downloads/usbforge.iso");
+        return;
+    }
+
+    script = uf_find_script("build-iso.sh");
+    if (!script) {
+        append_log("Could not find build-iso.sh.");
+        append_log("Expected in /usr/share/usbforge/scripts/ or ./scripts/");
+        return;
+    }
+
+    snprintf(cmd, sizeof(cmd), "bash '%s' '%s' 2>&1", script, iso);
+    start_job(cmd, "USBForge ISO created successfully. You can write it to a USB drive next.",
+              "ISO build failed. See log above (needs xorriso + grub-mkrescue).");
 }
 
 static void on_write_usb(void)
 {
     const char *iso;
     char *usb;
-    char cmd[USBFORGE_MAX_PATH * 3];
+    const char *script;
+    char cmd[USBFORGE_MAX_PATH * 4];
     GtkWidget *confirm;
     gint res;
+    int is_win;
 
     iso = gtk_entry_get_text(GTK_ENTRY(app.iso_entry));
     usb = selected_usb_path();
@@ -291,9 +306,14 @@ static void on_write_usb(void)
         return;
     }
 
+    is_win = uf_iso_is_windows(iso);
     confirm = gtk_message_dialog_new(
         GTK_WINDOW(app.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
-        "Everything on %s will be deleted.\n\nWrite bootable media from:\n%s", usb, iso);
+        "Everything on %s will be deleted.\n\n"
+        "%s bootable media will be created from:\n%s",
+        usb,
+        is_win ? "Windows" : "ISO",
+        iso);
     res = gtk_dialog_run(GTK_DIALOG(confirm));
     gtk_widget_destroy(confirm);
     if (res != GTK_RESPONSE_OK) {
@@ -302,11 +322,23 @@ static void on_write_usb(void)
         return;
     }
 
-    snprintf(cmd, sizeof(cmd),
-             "pkexec dd if=\"%s\" of=\"%s\" bs=4M status=progress conv=fsync oflag=direct",
-             iso, usb);
-    start_job(cmd, "USB media is ready. You can boot from this drive.",
-              "USB write failed. You may need administrator rights (pkexec/sudo).");
+    script = uf_find_script("write-media.sh");
+    if (script) {
+        snprintf(cmd, sizeof(cmd),
+                 "pkexec bash '%s' '%s' '%s' 2>&1", script, iso, usb);
+        start_job(cmd,
+                  is_win
+                      ? "Windows USB media is ready. You can boot from this drive."
+                      : "USB media is ready. You can boot from this drive.",
+                  "USB write failed. See log (needs pkexec; Windows ISOs also need parted, dosfstools, rsync; large WIMs need wimtools).");
+    } else {
+        append_log("write-media.sh not found — falling back to raw dd.");
+        snprintf(cmd, sizeof(cmd),
+                 "pkexec dd if='%s' of='%s' bs=4M status=progress conv=fsync oflag=direct 2>&1",
+                 iso, usb);
+        start_job(cmd, "USB media is ready (raw dd).",
+                  "USB write failed. You may need administrator rights.");
+    }
     g_free(usb);
 }
 
@@ -515,10 +547,12 @@ static GtkWidget *build_welcome(void)
     gtk_style_context_add_class(gtk_widget_get_style_context(sub), "uf-subtitle");
 
     list = gtk_label_new(
-        "What you can do:\n"
-        "  • Create a bootable USBForge ISO\n"
-        "  • Write an ISO to a USB flash drive (erases the drive)\n"
-        "  • Verify media and check for updates");
+        "Typical workflow (like Windows Media Creation Tool):\n"
+        "  1. Accept → choose \"Write an existing ISO to USB\"\n"
+        "  2. Browse to your Windows/Linux ISO\n"
+        "  3. Select your USB flash drive → Create\n"
+        "\n"
+        "Windows ISOs are extracted to FAT32 (large install.wim is split automatically).");
     gtk_label_set_xalign(GTK_LABEL(list), 0);
 
     accept = uf_primary_button("Accept");
@@ -551,16 +585,19 @@ static GtkWidget *build_mode(void)
         "<span size='x-large' weight='bold'>What do you want to do?</span>");
     gtk_widget_set_halign(title, GTK_ALIGN_START);
 
-    sub = gtk_label_new("Select one option to continue.");
+    sub = gtk_label_new(
+        "Most people should choose \"Write an existing ISO to USB\" — for example a\n"
+        "Windows 10/11 ISO you already downloaded. Building a USBForge ISO is optional.");
     gtk_style_context_add_class(gtk_widget_get_style_context(sub), "uf-subtitle");
     gtk_widget_set_halign(sub, GTK_ALIGN_START);
 
     app.radio_iso = gtk_radio_button_new_with_label(NULL,
-        "Create a bootable ISO file (recommended for sharing / archiving)");
+        "Build a new USBForge ISO file (advanced)");
     app.radio_usb = gtk_radio_button_new_with_label_from_widget(
         GTK_RADIO_BUTTON(app.radio_iso),
-        "Create bootable USB flash drive (write ISO to USB)");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(app.radio_iso), TRUE);
+        "Write an existing ISO to USB flash drive (Windows / Linux ISOs)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(app.radio_usb), TRUE);
+    app.mode = MODE_WRITE_USB;
     g_signal_connect(app.radio_iso, "toggled", G_CALLBACK(on_mode_toggled), NULL);
     g_signal_connect(app.radio_usb, "toggled", G_CALLBACK(on_mode_toggled), NULL);
 
@@ -733,7 +770,7 @@ static void activate(GtkApplication *gtk_app, gpointer user_data)
     (void)user_data;
 
     memset(&app, 0, sizeof(app));
-    app.mode = MODE_CREATE_ISO;
+    app.mode = MODE_WRITE_USB;
 
     app.window = gtk_application_window_new(gtk_app);
     gtk_window_set_title(GTK_WINDOW(app.window), "USBForge Media Creation Tool");

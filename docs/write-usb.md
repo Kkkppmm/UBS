@@ -1,30 +1,46 @@
 # Writing to USB
 
-## In Builder
+## Write an existing ISO (recommended)
 
-1. Build or open an ISO path
-2. **Refresh** the USB list
-3. Select the correct device (check size and model)
-4. **Write ISO -> USB**
-5. Confirm the warning - this **erases** the drive
+Use this for a Windows 10/11 ISO or any Linux hybrid ISO you already downloaded.
 
-The tool uses `dd` via `pkexec` so you can grant admin rights safely.
+1. Open **USBForge Media Creation**
+2. Accept → choose **Write an existing ISO to USB flash drive**
+3. Browse to your `.iso` (example: `Win10_22H2_....iso`)
+4. Select the USB flash drive → **Create**
 
-## Manual write
+### What happens
+
+| ISO type | Method |
+|----------|--------|
+| **Windows** | Partition + FAT32, copy files; splits `install.wim` if >4GB (needs `wimtools`) |
+| **Linux / hybrid** | Raw `dd` image write |
+
+### Extra packages for Windows ISOs (Debian/Ubuntu)
+
+```bash
+sudo apt-get install -y parted dosfstools rsync wimtools
+```
+
+## Build a new USBForge ISO
+
+Only if you want a USBForge Live ISO (not for writing a Windows ISO):
+
+1. Choose **Build a new USBForge ISO file**
+2. Pick a **new** output path such as `~/usbforge.iso` (do not select your Windows ISO)
+3. Create
+
+## Manual write (Linux hybrid only)
 
 ```bash
 sudo dd if=build/usbforge.iso of=/dev/sdX bs=4M status=progress conv=fsync
 sync
 ```
 
-Replace `/dev/sdX` with your USB device (**not** a partition like `/dev/sdX1`).
+## Windows app
 
-## Windows
+The Windows installer uses `write-iso.ps1` to write an ISO to a removable drive (UAC).
 
-1. Install `USBForge-*-windows-x64-setup.exe` (or unzip the portable package)
-2. Run **USBForge**
-3. Browse to a USBForge `.iso` (from GitHub Releases or built on Linux/WSL)
-4. Refresh and select the USB drive letter
-5. **Write ISO -> USB** and approve the UAC prompt
+## Safety
 
-The bundled `write-iso.ps1` writes to the physical disk and **erases** it.
+Writing bootable media **erases** the USB drive. Double-check the device.

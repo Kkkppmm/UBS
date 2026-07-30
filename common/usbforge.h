@@ -2,7 +2,7 @@
 #define USBFORGE_H
 
 #define USBFORGE_NAME        "USBForge"
-#define USBFORGE_VERSION     "1.2.0"
+#define USBFORGE_VERSION     "1.2.1"
 #define USBFORGE_TAGLINE     "Create, test, and install bootable USB media"
 #define USBFORGE_DOCS_DIR    "docs"
 #define USBFORGE_ISO_LABEL   "USBFORGE"
@@ -57,5 +57,10 @@ typedef struct {
 int  uf_version_cmp(const char *a, const char *b);
 /* Query GitHub Releases (needs curl or wget). Fills info. */
 int  uf_check_for_updates(UfUpdateInfo *info);
+
+/* Locate a packaged script (build-iso.sh, write-media.sh, ...). */
+const char *uf_find_script(const char *name);
+/* Return 1 if ISO looks like Microsoft Windows install media. */
+int  uf_iso_is_windows(const char *iso_path);
 
 #endif

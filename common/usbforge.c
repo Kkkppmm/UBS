@@ -478,3 +478,56 @@ int uf_check_for_updates(UfUpdateInfo *info)
     return 0;
 }
 
+const char *uf_find_script(const char *name)
+{
+    static char path[USBFORGE_MAX_PATH];
+    const char *dirs[] = {
+        "scripts",
+        "/usr/share/usbforge/scripts",
+        "/usbforge/scripts",
+        "/usr/local/share/usbforge/scripts",
+        NULL
+    };
+    int i;
+
+    if (!name || !*name)
+        return NULL;
+
+    for (i = 0; dirs[i]; i++) {
+        snprintf(path, sizeof(path), "%s/%s", dirs[i], name);
+        if (uf_file_exists(path))
+            return path;
+    }
+    return NULL;
+}
+
+int uf_iso_is_windows(const char *iso_path)
+{
+    char cmd[USBFORGE_MAX_PATH * 2];
+    char out[USBFORGE_MAX_LOG];
+
+    if (!iso_path || !uf_file_exists(iso_path))
+        return 0;
+
+    /* Look for classic Windows layout markers inside the ISO */
+    snprintf(cmd, sizeof(cmd),
+             "xorriso -indev '%s' -find /bootmgr -exec report_lba -- 2>/dev/null | head -n 3; "
+             "xorriso -indev '%s' -find /sources -exec report_lba -- 2>/dev/null | head -n 5",
+             iso_path, iso_path);
+    out[0] = '\0';
+    uf_run_cmd(cmd, out, sizeof(out));
+    if (strstr(out, "/bootmgr") || strstr(out, "/sources/") || strstr(out, "bootmgr"))
+        return 1;
+
+    /* Fallback: filename heuristics */
+    {
+        const char *base = strrchr(iso_path, '/');
+        base = base ? base + 1 : iso_path;
+        if (strncmp(base, "Win", 3) == 0 || strstr(base, "windows") || strstr(base, "Windows") ||
+            strstr(base, "WIN10") || strstr(base, "WIN11") || strstr(base, "Win10") ||
+            strstr(base, "Win11"))
+            return 1;
+    }
+    return 0;
+}
+
