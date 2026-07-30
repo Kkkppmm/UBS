@@ -4,3 +4,10 @@ build/
 *~
 .DS_Store
 *.AppImage
+*.deb
+*.rpm
+*.exe
+*.zip
+packaging/linux/arch/pkg/
+packaging/linux/arch/src/
+packaging/linux/arch/*.pkg.tar.*

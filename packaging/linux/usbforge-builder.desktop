@@ -1,0 +1,8 @@
+Name=USBForge Builder
+Comment=Create bootable ISOs and write them to USB
+Exec=usbforge-builder
+Icon=usbforge
+Terminal=false
+Type=Application
+Categories=System;Utility;
+Keywords=USB;ISO;bootable;

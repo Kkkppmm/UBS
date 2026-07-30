@@ -19,8 +19,12 @@ sync
 
 Replace `/dev/sdX` with your USB device (**not** a partition like `/dev/sdX1`).
 
-## After writing
+## Windows
 
-- Eject safely
-- Boot from USB in firmware settings / boot menu
-- Use USBForge Live for testing and docs
+1. Install `USBForge-*-windows-x64-setup.exe` (or unzip the portable package)
+2. Run **USBForge**
+3. Browse to a USBForge `.iso` (from GitHub Releases or built on Linux/WSL)
+4. Refresh and select the USB drive letter
+5. **Write ISO -> USB** and approve the UAC prompt
+
+The bundled `write-iso.ps1` writes to the physical disk and **erases** it.

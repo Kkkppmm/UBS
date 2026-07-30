@@ -2,7 +2,7 @@
 #define USBFORGE_H
 
 #define USBFORGE_NAME        "USBForge"
-#define USBFORGE_VERSION     "1.0.0"
+#define USBFORGE_VERSION     "1.1.0"
 #define USBFORGE_TAGLINE     "Create, test, and install bootable USB media"
 #define USBFORGE_DOCS_DIR    "docs"
 #define USBFORGE_ISO_LABEL   "USBFORGE"
@@ -12,14 +12,21 @@
 #define USBFORGE_MAX_DEVICES 64
 #define USBFORGE_MAX_LOG     8192
 
+#ifdef _WIN32
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#endif
+
 typedef struct {
-    char path[64];
+    char path[64];       /* /dev/sdX or E:\ or \\.\PhysicalDrive1 */
     char name[128];
     char model[128];
     char size[64];
     char transport[32];
     int  removable;
     int  is_usb;
+    int  physical_index; /* Windows PhysicalDriveN, -1 if unknown */
 } UsbDevice;
 
 typedef struct {

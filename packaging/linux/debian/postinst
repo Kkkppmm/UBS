@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+# Ensure docs and desktop entry are readable
+chmod 755 /usr/bin/usbforge-builder /usr/bin/usbforge-live 2>/dev/null || true
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q || true
+fi
+exit 0

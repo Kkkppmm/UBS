@@ -1,0 +1,8 @@
+Name=USBForge Live
+Comment=USB Lab - test devices, diagnostics, and docs
+Exec=usbforge-live
+Icon=usbforge
+Terminal=false
+Type=Application
+Categories=System;Utility;
+Keywords=USB;test;diagnostics;

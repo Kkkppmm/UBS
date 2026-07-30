@@ -550,6 +550,11 @@ static GtkWidget *build_help_page(void)
     gtk_box_pack_start(GTK_BOX(topics), b3, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(topics), b4, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(topics), b5, FALSE, FALSE, 0);
+    {
+        GtkWidget *b6 = gtk_button_new_with_label("Packages");
+        g_signal_connect(b6, "clicked", G_CALLBACK(on_help_topic), (gpointer)"packages.md");
+        gtk_box_pack_start(GTK_BOX(topics), b6, FALSE, FALSE, 0);
+    }
     gtk_box_pack_start(GTK_BOX(box), topics, FALSE, FALSE, 0);
 
     scrolled = gtk_scrolled_window_new(NULL, NULL);
