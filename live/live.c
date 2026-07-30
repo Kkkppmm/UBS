@@ -359,6 +359,46 @@ static void on_help_topic(GtkButton *btn, gpointer user_data)
     gtk_stack_set_visible_child_name(GTK_STACK(app.stack), "help");
 }
 
+static void on_check_updates(GtkButton *btn, gpointer user_data)
+{
+    UfUpdateInfo info;
+    GtkWidget *dialog;
+    (void)btn;
+    (void)user_data;
+
+    set_status("Checking for updates...");
+    while (gtk_events_pending())
+        gtk_main_iteration();
+
+    uf_check_for_updates(&info);
+    set_status(info.message);
+
+    dialog = gtk_message_dialog_new(
+        GTK_WINDOW(app.window),
+        GTK_DIALOG_MODAL,
+        info.update_available ? GTK_MESSAGE_QUESTION : GTK_MESSAGE_INFO,
+        info.update_available ? GTK_BUTTONS_YES_NO : GTK_BUTTONS_OK,
+        "%s", info.message);
+
+    if (info.update_available) {
+        gtk_message_dialog_format_secondary_text(
+            GTK_MESSAGE_DIALOG(dialog),
+            "Run usbforge-update to install the latest package?");
+    }
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_YES && info.update_available) {
+        if (uf_file_exists("/usr/bin/usbforge-update"))
+            g_spawn_command_line_async(
+                "x-terminal-emulator -e usbforge-update || "
+                "gnome-terminal -- usbforge-update || usbforge-update", NULL);
+        else if (uf_file_exists("scripts/usbforge-update.sh"))
+            g_spawn_command_line_async("bash scripts/usbforge-update.sh", NULL);
+        else
+            g_spawn_command_line_async("xdg-open " USBFORGE_RELEASES_URL, NULL);
+    }
+    gtk_widget_destroy(dialog);
+}
+
 static void on_install(GtkButton *btn, gpointer user_data)
 {
     char *target;
@@ -515,6 +555,7 @@ static GtkWidget *build_home(void)
     gtk_grid_attach(GTK_GRID(grid), big_button("Help & Docs", G_CALLBACK(on_show_page), (gpointer)"help"), 1, 1, 1, 1);
     gtk_grid_attach(GTK_GRID(grid), big_button("Install / Copy Tools", G_CALLBACK(on_show_page), (gpointer)"install"), 0, 2, 1, 1);
     gtk_grid_attach(GTK_GRID(grid), big_button("Device List", G_CALLBACK(on_show_page), (gpointer)"devices"), 1, 2, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), big_button("Check for Updates", G_CALLBACK(on_check_updates), NULL), 0, 3, 2, 1);
 
     gtk_box_pack_start(GTK_BOX(box), title, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), sub, FALSE, FALSE, 0);

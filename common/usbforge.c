@@ -373,3 +373,108 @@ const char *uf_docs_path(const char *relative)
         snprintf(path, sizeof(path), "docs");
     return path;
 }
+
+int uf_version_cmp(const char *a, const char *b)
+{
+    int ai[4] = {0, 0, 0, 0};
+    int bi[4] = {0, 0, 0, 0};
+    int i;
+
+    if (!a) a = "0";
+    if (!b) b = "0";
+    sscanf(a, "%d.%d.%d.%d", &ai[0], &ai[1], &ai[2], &ai[3]);
+    sscanf(b, "%d.%d.%d.%d", &bi[0], &bi[1], &bi[2], &bi[3]);
+    for (i = 0; i < 4; i++) {
+        if (ai[i] < bi[i]) return -1;
+        if (ai[i] > bi[i]) return 1;
+    }
+    return 0;
+}
+
+static void json_extract_string(const char *json, const char *key, char *out, int outlen)
+{
+    char pattern[128];
+    const char *p, *q;
+
+    if (!json || !key || !out || outlen < 1) {
+        if (out && outlen > 0) out[0] = '\0';
+        return;
+    }
+    out[0] = '\0';
+    snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+    p = strstr(json, pattern);
+    if (!p) return;
+    p = strchr(p + strlen(pattern), '"');
+    if (!p) return;
+    p++;
+    q = strchr(p, '"');
+    if (!q) return;
+    if ((int)(q - p) >= outlen)
+        q = p + outlen - 1;
+    memcpy(out, p, (size_t)(q - p));
+    out[q - p] = '\0';
+}
+
+int uf_check_for_updates(UfUpdateInfo *info)
+{
+    char cmd[512];
+    char buf[USBFORGE_MAX_LOG];
+    char tag[64];
+    const char *ver;
+    int rc;
+
+    if (!info)
+        return -1;
+    memset(info, 0, sizeof(*info));
+
+#ifdef _WIN32
+    snprintf(cmd, sizeof(cmd),
+             "curl.exe -fsSL -A USBForge/%s \"%s\" 2>nul",
+             USBFORGE_VERSION, USBFORGE_RELEASES_API);
+#else
+    snprintf(cmd, sizeof(cmd),
+             "curl -fsSL -A 'USBForge/%s' '%s' 2>/dev/null || "
+             "wget -qO- --user-agent='USBForge/%s' '%s' 2>/dev/null",
+             USBFORGE_VERSION, USBFORGE_RELEASES_API,
+             USBFORGE_VERSION, USBFORGE_RELEASES_API);
+#endif
+
+    buf[0] = '\0';
+    rc = uf_run_cmd(cmd, buf, sizeof(buf));
+    if (rc != 0 || !buf[0] || buf[0] != '{') {
+        info->ok = 0;
+        snprintf(info->message, sizeof(info->message),
+                 "Could not reach update server. Check your network (needs curl/wget).");
+        snprintf(info->html_url, sizeof(info->html_url), "%s", USBFORGE_RELEASES_URL);
+        return -1;
+    }
+
+    json_extract_string(buf, "tag_name", tag, sizeof(tag));
+    json_extract_string(buf, "html_url", info->html_url, sizeof(info->html_url));
+    if (!tag[0]) {
+        info->ok = 0;
+        snprintf(info->message, sizeof(info->message), "Unexpected response from update server.");
+        return -1;
+    }
+
+    /* strip leading v */
+    ver = tag;
+    if (ver[0] == 'v' || ver[0] == 'V')
+        ver++;
+    snprintf(info->latest_tag, sizeof(info->latest_tag), "%s", tag);
+    if (!info->html_url[0])
+        snprintf(info->html_url, sizeof(info->html_url), "%s", USBFORGE_RELEASES_URL);
+
+    info->ok = 1;
+    if (uf_version_cmp(USBFORGE_VERSION, ver) < 0) {
+        info->update_available = 1;
+        snprintf(info->message, sizeof(info->message),
+                 "Update available: %s (you have %s)", tag, USBFORGE_VERSION);
+    } else {
+        info->update_available = 0;
+        snprintf(info->message, sizeof(info->message),
+                 "You are up to date (v%s).", USBFORGE_VERSION);
+    }
+    return 0;
+}
+

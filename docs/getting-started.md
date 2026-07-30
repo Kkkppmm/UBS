@@ -1,5 +1,19 @@
 # Getting Started
 
+## Find the app after installing a package
+
+Search your app menu for **USBForge Builder** or **USBForge Live**.
+Or run `usbforge-builder` / `usbforge-live` in a terminal.
+See **finding-usbforge.md** if nothing appears in the menu.
+
+## Updates
+
+Click **Check Updates** in the app, or run:
+
+```bash
+usbforge-update
+```
+
 ## Install build dependencies
 
 On Debian/Ubuntu:
@@ -9,7 +23,7 @@ sudo apt-get install -y build-essential pkg-config libgtk-3-dev \
     xorriso grub-common grub-pc-bin mtools
 ```
 
-## Build
+## Build from source
 
 ```bash
 make
@@ -22,7 +36,7 @@ You should get:
 
 ## Create your first ISO
 
-1. Start Builder: `./build/usbforge-builder`
+1. Start Builder: `./build/usbforge-builder` (or from the app menu)
 2. Open the **Builder** page
 3. Set an output path (default `build/usbforge.iso`)
 4. Click **Build Bootable ISO**

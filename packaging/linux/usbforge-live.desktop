@@ -1,8 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
 Name=USBForge Live
-Comment=USB Lab - test devices, diagnostics, and docs
+GenericName=USB Lab
+Comment=USB Lab - test devices, diagnostics, help, and optional install
 Exec=usbforge-live
+TryExec=usbforge-live
 Icon=usbforge
 Terminal=false
-Type=Application
-Categories=System;Utility;
-Keywords=USB;test;diagnostics;
+Categories=Utility;GTK;
+Keywords=USB;test;diagnostics;lab;USBForge;
+StartupNotify=true
+StartupWMClass=usbforge-live

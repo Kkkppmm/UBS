@@ -2,7 +2,7 @@
 ; Build: makensis packaging/windows/usbforge.nsi
 
 !define APP_NAME "USBForge"
-!define APP_VERSION "1.1.0"
+!define APP_VERSION "1.1.1"
 !define APP_PUBLISHER "USBForge Contributors"
 !define APP_EXE "USBForge.exe"
 !define APP_UNINST "Uninstall.exe"
@@ -69,6 +69,8 @@ Section "USBForge (required)" SecMain
 
   CreateDirectory "$SMPROGRAMS\USBForge"
   CreateShortCut "$SMPROGRAMS\USBForge\USBForge.lnk" "$INSTDIR\${APP_EXE}"
+  CreateShortCut "$SMPROGRAMS\USBForge\USBForge Builder.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0
+  CreateShortCut "$SMPROGRAMS\USBForge\Check for Updates.lnk" "https://github.com/Kkkppmm/UBS/releases"
   CreateShortCut "$SMPROGRAMS\USBForge\Docs.lnk" "$INSTDIR\docs"
   CreateShortCut "$SMPROGRAMS\USBForge\Uninstall.lnk" "$INSTDIR\${APP_UNINST}"
   CreateShortCut "$DESKTOP\USBForge.lnk" "$INSTDIR\${APP_EXE}"

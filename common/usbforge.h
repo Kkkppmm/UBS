@@ -2,10 +2,12 @@
 #define USBFORGE_H
 
 #define USBFORGE_NAME        "USBForge"
-#define USBFORGE_VERSION     "1.1.0"
+#define USBFORGE_VERSION     "1.1.1"
 #define USBFORGE_TAGLINE     "Create, test, and install bootable USB media"
 #define USBFORGE_DOCS_DIR    "docs"
 #define USBFORGE_ISO_LABEL   "USBFORGE"
+#define USBFORGE_RELEASES_API "https://api.github.com/repos/Kkkppmm/UBS/releases/latest"
+#define USBFORGE_RELEASES_URL "https://github.com/Kkkppmm/UBS/releases"
 
 #define USBFORGE_MAX_PATH    1024
 #define USBFORGE_MAX_LINE    512
@@ -42,5 +44,18 @@ int  uf_ensure_dir(const char *path);
 void uf_human_size(unsigned long long bytes, char *out, int outlen);
 int  uf_run_cmd(const char *cmd, char *out, int outlen);
 const char *uf_docs_path(const char *relative);
+
+typedef struct {
+    char latest_tag[64];
+    char html_url[512];
+    int  update_available; /* 1 if latest > installed */
+    int  ok;               /* 1 if check succeeded */
+    char message[256];
+} UfUpdateInfo;
+
+/* Compare dotted versions like 1.1.0 vs 1.1.1; returns <0, 0, >0 */
+int  uf_version_cmp(const char *a, const char *b);
+/* Query GitHub Releases (needs curl or wget). Fills info. */
+int  uf_check_for_updates(UfUpdateInfo *info);
 
 #endif

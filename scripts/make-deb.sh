@@ -20,20 +20,25 @@ mkdir -p "$STAGE/usr/share/usbforge/docs"
 mkdir -p "$STAGE/usr/share/usbforge/scripts"
 mkdir -p "$STAGE/usr/share/applications"
 mkdir -p "$STAGE/usr/share/doc/usbforge"
+mkdir -p "$STAGE/usr/share/icons/hicolor"
 
 # Control file with dynamic version
 sed "s/^Version:.*/Version: ${VERSION}/" \
     "$ROOT/packaging/linux/debian/control" > "$STAGE/DEBIAN/control"
 cp "$ROOT/packaging/linux/debian/postinst" "$STAGE/DEBIAN/postinst"
-chmod 755 "$STAGE/DEBIAN/postinst"
+cp "$ROOT/packaging/linux/debian/postrm" "$STAGE/DEBIAN/postrm"
+chmod 755 "$STAGE/DEBIAN/postinst" "$STAGE/DEBIAN/postrm"
 
 install -m755 "$ROOT/build/usbforge-builder" "$STAGE/usr/bin/"
 install -m755 "$ROOT/build/usbforge-live" "$STAGE/usr/bin/"
+install -m755 "$ROOT/scripts/usbforge-update.sh" "$STAGE/usr/bin/usbforge-update"
 install -m644 "$ROOT/docs/"* "$STAGE/usr/share/usbforge/docs/"
 install -m755 "$ROOT/scripts/build-iso.sh" "$STAGE/usr/share/usbforge/scripts/"
 install -m755 "$ROOT/scripts/live-autostart.sh" "$STAGE/usr/share/usbforge/scripts/"
+install -m755 "$ROOT/scripts/usbforge-update.sh" "$STAGE/usr/share/usbforge/scripts/"
 install -m644 "$ROOT/packaging/linux/usbforge-builder.desktop" "$STAGE/usr/share/applications/"
 install -m644 "$ROOT/packaging/linux/usbforge-live.desktop" "$STAGE/usr/share/applications/"
+cp -a "$ROOT/packaging/linux/icons/hicolor/." "$STAGE/usr/share/icons/hicolor/"
 install -m644 "$ROOT/README.md" "$STAGE/usr/share/doc/usbforge/"
 install -m644 "$ROOT/LICENSE" "$STAGE/usr/share/doc/usbforge/copyright"
 
@@ -43,6 +48,13 @@ echo "Installed-Size: $SIZE" >> "$STAGE/DEBIAN/control"
 
 mkdir -p "$OUT_DIR"
 fakeroot dpkg-deb --build "$STAGE" "$OUT_DIR/${PKG_NAME}.deb"
-dpkg-deb -I "$OUT_DIR/${PKG_NAME}.deb" | head -20
+dpkg-deb -I "$OUT_DIR/${PKG_NAME}.deb" | head -25
+# Validate desktop files inside the package
+TMPD="$(mktemp -d)"
+dpkg-deb -x "$OUT_DIR/${PKG_NAME}.deb" "$TMPD"
+grep -l '\[Desktop Entry\]' "$TMPD"/usr/share/applications/*.desktop
+test -f "$TMPD/usr/share/icons/hicolor/48x48/apps/usbforge.png"
+test -x "$TMPD/usr/bin/usbforge-update"
+rm -rf "$TMPD"
 ls -lh "$OUT_DIR/${PKG_NAME}.deb"
 echo "[deb] Done."

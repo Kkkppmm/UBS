@@ -382,6 +382,64 @@ static void on_show_page(GtkButton *btn, gpointer user_data)
     gtk_stack_set_visible_child_name(GTK_STACK(app.stack), name);
 }
 
+static void on_check_updates(GtkButton *btn, gpointer user_data)
+{
+    UfUpdateInfo info;
+    GtkWidget *dialog;
+    GtkButtonsType buttons;
+    const char *secondary;
+    (void)btn;
+    (void)user_data;
+
+    append_log("Checking for updates...");
+    while (gtk_events_pending())
+        gtk_main_iteration();
+
+    uf_check_for_updates(&info);
+    append_log(info.message);
+
+    if (info.update_available)
+        buttons = GTK_BUTTONS_YES_NO;
+    else
+        buttons = GTK_BUTTONS_OK;
+
+    dialog = gtk_message_dialog_new(
+        GTK_WINDOW(app.window),
+        GTK_DIALOG_MODAL,
+        info.update_available ? GTK_MESSAGE_QUESTION : GTK_MESSAGE_INFO,
+        buttons,
+        "%s", info.message);
+
+    if (info.update_available) {
+        secondary = "Install the update now with usbforge-update?\n"
+                    "(You can also download packages from GitHub Releases.)";
+        gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s", secondary);
+    } else if (info.html_url[0]) {
+        gtk_message_dialog_format_secondary_text(
+            GTK_MESSAGE_DIALOG(dialog), "Releases: %s", info.html_url);
+    }
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_YES && info.update_available) {
+        append_log("Launching usbforge-update...");
+        if (uf_file_exists("/usr/bin/usbforge-update"))
+            start_job("x-terminal-emulator -e usbforge-update 2>/dev/null || "
+                      "gnome-terminal -- usbforge-update 2>/dev/null || "
+                      "xfce4-terminal -e usbforge-update 2>/dev/null || "
+                      "usbforge-update",
+                      "Updater finished (or closed).",
+                      "Could not launch updater. Run: usbforge-update");
+        else if (uf_file_exists("scripts/usbforge-update.sh"))
+            start_job("bash scripts/usbforge-update.sh",
+                      "Updater finished.",
+                      "Update script failed.");
+        else {
+            append_log("usbforge-update not installed. Opening releases page...");
+            g_spawn_command_line_async("xdg-open " USBFORGE_RELEASES_URL, NULL);
+        }
+    }
+    gtk_widget_destroy(dialog);
+}
+
 static GtkWidget *make_nav_button(const char *label, const char *page, GCallback cb)
 {
     GtkWidget *b = gtk_button_new_with_label(label);
@@ -652,6 +710,15 @@ static void activate(GtkApplication *gtk_app, gpointer user_data)
         make_nav_button("Builder", "builder", G_CALLBACK(on_show_page)), FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(nav),
         make_nav_button("Help & Docs", "help", G_CALLBACK(on_show_page)), FALSE, FALSE, 0);
+    {
+        GtkWidget *upd = gtk_button_new_with_label("Check Updates");
+        gtk_widget_set_margin_top(upd, 4);
+        gtk_widget_set_margin_bottom(upd, 4);
+        gtk_widget_set_margin_start(upd, 8);
+        gtk_widget_set_margin_end(upd, 8);
+        g_signal_connect(upd, "clicked", G_CALLBACK(on_check_updates), NULL);
+        gtk_box_pack_start(GTK_BOX(nav), upd, FALSE, FALSE, 0);
+    }
 
     content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     app.stack = gtk_stack_new();

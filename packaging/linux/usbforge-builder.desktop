@@ -1,8 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
 Name=USBForge Builder
+GenericName=Bootable ISO Builder
 Comment=Create bootable ISOs and write them to USB
 Exec=usbforge-builder
+TryExec=usbforge-builder
 Icon=usbforge
 Terminal=false
-Type=Application
-Categories=System;Utility;
-Keywords=USB;ISO;bootable;
+Categories=Utility;GTK;
+Keywords=USB;ISO;bootable;flash;dd;USBForge;
+StartupNotify=true
+StartupWMClass=usbforge-builder

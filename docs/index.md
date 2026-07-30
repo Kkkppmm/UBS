@@ -5,6 +5,7 @@ Welcome to **USBForge** - create bootable ISOs, write them to USB, and boot into
 ## Topics
 
 - **getting-started.md** - First steps
+- **finding-usbforge.md** - App menu + updater
 - **create-iso.md** - Building the ISO
 - **write-usb.md** - Writing the ISO to a stick
 - **live-lab.md** - What the Live session offers

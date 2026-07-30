@@ -17,22 +17,33 @@ make -C "$ROOT" all iso
 TAR_NAME="usbforge-${VERSION}-linux-x86_64"
 STAGE="$OUT/$TAR_NAME"
 rm -rf "$STAGE"
-mkdir -p "$STAGE/bin" "$STAGE/docs" "$STAGE/scripts" "$STAGE/share/applications"
+mkdir -p "$STAGE/bin" "$STAGE/docs" "$STAGE/scripts" "$STAGE/share/applications" "$STAGE/share/icons/hicolor"
 cp "$ROOT/build/usbforge-builder" "$ROOT/build/usbforge-live" "$STAGE/bin/"
+cp "$ROOT/scripts/usbforge-update.sh" "$STAGE/bin/usbforge-update"
 cp "$ROOT/docs/"* "$STAGE/docs/"
 cp "$ROOT/scripts/"*.sh "$STAGE/scripts/" 2>/dev/null || true
 cp "$ROOT/packaging/linux/"*.desktop "$STAGE/share/applications/"
+cp -a "$ROOT/packaging/linux/icons/hicolor/." "$STAGE/share/icons/hicolor/"
 cp "$ROOT/README.md" "$ROOT/LICENSE" "$STAGE/"
 cat > "$STAGE/install.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 PREFIX="${PREFIX:-/usr/local}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
-install -d "$PREFIX/bin" "$PREFIX/share/usbforge/docs" "$PREFIX/share/applications"
+install -d "$PREFIX/bin" "$PREFIX/share/usbforge/docs" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor"
 install -m755 "$DIR/bin/"* "$PREFIX/bin/"
 install -m644 "$DIR/docs/"* "$PREFIX/share/usbforge/docs/"
 install -m644 "$DIR/share/applications/"* "$PREFIX/share/applications/" 2>/dev/null || true
+cp -a "$DIR/share/icons/hicolor/." "$PREFIX/share/icons/hicolor/" 2>/dev/null || true
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database -q "$PREFIX/share/applications" 2>/dev/null || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
+fi
 echo "Installed USBForge to $PREFIX"
+echo "Open your app menu and search for: USBForge Builder / USBForge Live"
+echo "Or run: usbforge-builder"
 EOF
 chmod +x "$STAGE/install.sh" "$STAGE/scripts/"*.sh "$STAGE/bin/"*
 (

@@ -28,6 +28,7 @@
 #define ID_TOPIC_SAFE     1012
 #define ID_VERIFY         1013
 #define ID_BUILD_HINT     1014
+#define ID_CHECK_UPDATES  1015
 
 static HWND g_hwnd;
 static HWND g_iso;
@@ -279,6 +280,29 @@ static void build_hint(void)
         "USBForge - Build ISO", MB_ICONINFORMATION);
 }
 
+static void check_updates(void)
+{
+    UfUpdateInfo info;
+    char msg[512];
+
+    append_log("Checking for updates...");
+    uf_check_for_updates(&info);
+    append_log(info.message);
+
+    if (info.update_available) {
+        snprintf(msg, sizeof(msg),
+                 "%s\n\nOpen the downloads page now?", info.message);
+        if (MessageBoxA(g_hwnd, msg, "USBForge Update",
+                        MB_ICONQUESTION | MB_YESNO) == IDYES) {
+            ShellExecuteA(g_hwnd, "open",
+                          info.html_url[0] ? info.html_url : USBFORGE_RELEASES_URL,
+                          NULL, NULL, SW_SHOWNORMAL);
+        }
+    } else {
+        MessageBoxA(g_hwnd, info.message, "USBForge Update", MB_ICONINFORMATION);
+    }
+}
+
 static void create_ui(HWND hwnd)
 {
     int y = 16;
@@ -321,6 +345,8 @@ static void create_ui(HWND hwnd)
                   260, y, 140, 34, hwnd, (HMENU)ID_BUILD_HINT, NULL, NULL);
     CreateWindowA("BUTTON", "Open Docs Folder", WS_CHILD | WS_VISIBLE,
                   410, y, 140, 34, hwnd, (HMENU)ID_OPEN_DOCS, NULL, NULL);
+    CreateWindowA("BUTTON", "Check Updates", WS_CHILD | WS_VISIBLE,
+                  560, y, 130, 34, hwnd, (HMENU)ID_CHECK_UPDATES, NULL, NULL);
     y += 48;
 
     CreateWindowA("STATIC", "Help topics:", WS_CHILD | WS_VISIBLE, 20, y, 100, 20, hwnd, NULL, NULL, NULL);
@@ -372,6 +398,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         case ID_WRITE_USB: write_iso_to_usb(); break;
         case ID_OPEN_DOCS: open_docs_folder(); break;
         case ID_BUILD_HINT: build_hint(); break;
+        case ID_CHECK_UPDATES: check_updates(); break;
         case ID_TOPIC_START: load_help_file("getting-started.md"); break;
         case ID_TOPIC_WRITE: load_help_file("write-usb.md"); break;
         case ID_TOPIC_SAFE: load_help_file("safety.md"); break;

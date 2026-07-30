@@ -20,14 +20,18 @@ mkdir -p "$PAYLOAD/usr/share/usbforge/scripts"
 mkdir -p "$PAYLOAD/usr/share/applications"
 mkdir -p "$PAYLOAD/usr/share/doc/usbforge"
 mkdir -p "$PAYLOAD/usr/share/licenses/usbforge"
+mkdir -p "$PAYLOAD/usr/share/icons/hicolor"
 
 install -m755 "$ROOT/build/usbforge-builder" "$PAYLOAD/usr/bin/"
 install -m755 "$ROOT/build/usbforge-live" "$PAYLOAD/usr/bin/"
+install -m755 "$ROOT/scripts/usbforge-update.sh" "$PAYLOAD/usr/bin/usbforge-update"
 install -m644 "$ROOT/docs/"* "$PAYLOAD/usr/share/usbforge/docs/"
 install -m755 "$ROOT/scripts/build-iso.sh" "$PAYLOAD/usr/share/usbforge/scripts/"
 install -m755 "$ROOT/scripts/live-autostart.sh" "$PAYLOAD/usr/share/usbforge/scripts/"
+install -m755 "$ROOT/scripts/usbforge-update.sh" "$PAYLOAD/usr/share/usbforge/scripts/"
 install -m644 "$ROOT/packaging/linux/usbforge-builder.desktop" "$PAYLOAD/usr/share/applications/"
 install -m644 "$ROOT/packaging/linux/usbforge-live.desktop" "$PAYLOAD/usr/share/applications/"
+cp -a "$ROOT/packaging/linux/icons/hicolor/." "$PAYLOAD/usr/share/icons/hicolor/"
 install -m644 "$ROOT/README.md" "$PAYLOAD/usr/share/doc/usbforge/"
 install -m644 "$ROOT/LICENSE" "$PAYLOAD/usr/share/licenses/usbforge/"
 
@@ -57,12 +61,27 @@ rm -rf %{buildroot}
 mkdir -p %{buildroot}
 cp -a ${PAYLOAD}/. %{buildroot}/
 
+%post
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database -q /usr/share/applications >/dev/null 2>&1 || :
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || :
+fi
+
+%postun
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database -q /usr/share/applications >/dev/null 2>&1 || :
+fi
+
 %files
 /usr/bin/usbforge-builder
 /usr/bin/usbforge-live
+/usr/bin/usbforge-update
 /usr/share/usbforge
 /usr/share/applications/usbforge-builder.desktop
 /usr/share/applications/usbforge-live.desktop
+/usr/share/icons/hicolor
 /usr/share/doc/usbforge
 /usr/share/licenses/usbforge
 EOF

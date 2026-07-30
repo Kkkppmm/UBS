@@ -1,13 +1,13 @@
 Package: usbforge
-Version: 1.1.0
+Version: 1.1.1
 Section: utils
 Priority: optional
 Architecture: amd64
 Depends: libgtk-3-0, xorriso
-Recommends: grub-common, grub-pc-bin, mtools, pkexec
+Recommends: grub-common, grub-pc-bin, mtools, pkexec, curl | wget
 Maintainer: USBForge Contributors <usbforge@localhost>
 Description: Bootable ISO builder and Live USB Lab
  USBForge creates GRUB-bootable ISOs, writes them to USB, and provides a
  Live USB Lab GUI for device testing, diagnostics, and documentation.
- Install is optional; testing and help are first-class features.
+ Includes menu launchers, icons, and an updater (usbforge-update).
 Homepage: https://github.com/Kkkppmm/UBS
