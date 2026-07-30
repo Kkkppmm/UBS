@@ -526,33 +526,20 @@ static GtkWidget *big_button(const char *label, GCallback cb, gpointer data)
 
 static GtkWidget *build_home(void)
 {
-    GtkWidget *box, *step, *title, *sub, *grid;
+    GtkWidget *box, *title, *sub, *grid;
 
-    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 14);
-    gtk_widget_set_margin_top(box, 8);
-    gtk_widget_set_margin_bottom(box, 8);
-    gtk_widget_set_margin_start(box, 8);
-    gtk_widget_set_margin_end(box, 8);
+    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
 
-    step = gtk_label_new("USBFORGE LIVE  ·  USB LAB");
-    gtk_style_context_add_class(gtk_widget_get_style_context(step), "uf-step");
-    gtk_widget_set_halign(step, GTK_ALIGN_START);
-
-    title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(title),
-        "<span size='x-large' weight='bold'>What do you want to do?</span>");
-    gtk_widget_set_halign(title, GTK_ALIGN_START);
-
-    sub = gtk_label_new(
-        "Booted media tools — test USB devices, read help, run diagnostics.\n"
+    title = uf_title_label("What do you want to do?");
+    sub = uf_subtitle_label(
+        "USBForge Live tools — probe devices, run tests, and read help. "
         "Install is optional.");
-    gtk_style_context_add_class(gtk_widget_get_style_context(sub), "uf-subtitle");
-    gtk_widget_set_halign(sub, GTK_ALIGN_START);
 
     grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
     gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
     gtk_widget_set_hexpand(grid, TRUE);
+    gtk_widget_set_margin_top(grid, 8);
 
     gtk_grid_attach(GTK_GRID(grid), big_button("USB device probe", G_CALLBACK(on_usb_probe), NULL), 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(grid), big_button("USB read speed test", G_CALLBACK(on_usb_read_test), NULL), 1, 0, 1, 1);
@@ -562,10 +549,9 @@ static GtkWidget *build_home(void)
     gtk_grid_attach(GTK_GRID(grid), big_button("Device list", G_CALLBACK(on_show_page), (gpointer)"devices"), 1, 2, 1, 1);
     gtk_grid_attach(GTK_GRID(grid), big_button("Check for updates", G_CALLBACK(on_check_updates), NULL), 0, 3, 2, 1);
 
-    gtk_box_pack_start(GTK_BOX(box), step, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), title, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), sub, FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(box), grid, FALSE, FALSE, 12);
+    gtk_box_pack_start(GTK_BOX(box), grid, FALSE, FALSE, 8);
     return box;
 }
 
@@ -690,15 +676,14 @@ static GtkWidget *build_install(void)
     gtk_widget_set_margin_top(box, 24);
 
     lbl = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(lbl),
-        "<span size='large' weight='bold'>Install / Copy Tools</span>");
+    gtk_label_set_text(GTK_LABEL(lbl), "Install / Copy Tools");
+    gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "uf-title");
     gtk_widget_set_halign(lbl, GTK_ALIGN_START);
 
-    hint = gtk_label_new(
+    hint = uf_subtitle_label(
         "USBForge Live is more than an installer. Use USB testing and docs first.\n"
         "When you are ready, copy the USBForge tools onto a USB drive here.\n"
-        "For a fully bootable stick, prefer Builder -> Write ISO -> USB on a host PC.");
-    gtk_label_set_xalign(GTK_LABEL(hint), 0);
+        "For a fully bootable stick, prefer Builder → Write ISO → USB on a host PC.");
 
     app.target_store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
     app.install_target = gtk_combo_box_new_with_model(GTK_TREE_MODEL(app.target_store));
@@ -710,7 +695,7 @@ static GtkWidget *build_install(void)
     gtk_style_context_add_class(gtk_widget_get_style_context(go), "uf-danger");
     g_signal_connect(go, "clicked", G_CALLBACK(on_install), NULL);
 
-    back = gtk_button_new_with_label("Back to Home");
+    back = uf_secondary_button("Back");
     g_signal_connect(back, "clicked", G_CALLBACK(on_show_page), (gpointer)"home");
 
     row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
@@ -718,10 +703,10 @@ static GtkWidget *build_install(void)
     gtk_box_pack_start(GTK_BOX(row), back, FALSE, FALSE, 0);
 
     gtk_box_pack_start(GTK_BOX(box), lbl, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), hint, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Target USB:"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), hint, FALSE, FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Target USB:"), FALSE, FALSE, 8);
     gtk_box_pack_start(GTK_BOX(box), app.install_target, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), row, FALSE, FALSE, 8);
+    gtk_box_pack_start(GTK_BOX(box), row, FALSE, FALSE, 12);
     return box;
 }
 
@@ -732,22 +717,22 @@ static void activate(GtkApplication *gtk_app, gpointer user_data)
 
     memset(&app, 0, sizeof(app));
     app.window = gtk_application_window_new(gtk_app);
-    gtk_window_set_title(GTK_WINDOW(app.window), "USBForge Live — USB Lab");
-    gtk_window_set_default_size(GTK_WINDOW(app.window), 760, 560);
+    gtk_window_set_title(GTK_WINDOW(app.window), "USBForge Live");
+    gtk_window_set_default_size(GTK_WINDOW(app.window), 700, 540);
     gtk_window_set_position(GTK_WINDOW(app.window), GTK_WIN_POS_CENTER);
 
     apply_css();
 
     outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_style_context_add_class(gtk_widget_get_style_context(outer), "uf-root");
-    header = uf_header_bar("USBForge Live   ·   USB Lab   ·   v" USBFORGE_VERSION);
+    header = uf_header_bar_versioned("USBForge Live", "USB Lab  ·  v" USBFORGE_VERSION);
 
     content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_style_context_add_class(gtk_widget_get_style_context(content), "uf-content");
 
     app.stack = gtk_stack_new();
     gtk_stack_set_transition_type(GTK_STACK(app.stack), GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
-    gtk_stack_set_transition_duration(GTK_STACK(app.stack), 220);
+    gtk_stack_set_transition_duration(GTK_STACK(app.stack), 180);
     gtk_stack_add_named(GTK_STACK(app.stack), build_home(), "home");
     gtk_stack_add_named(GTK_STACK(app.stack), build_devices(), "devices");
     gtk_stack_add_named(GTK_STACK(app.stack), build_results(), "results");

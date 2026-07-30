@@ -2,7 +2,7 @@
 ; Build: makensis packaging/windows/usbforge.nsi
 
 !define APP_NAME "USBForge"
-!define APP_VERSION "1.2.2"
+!define APP_VERSION "1.3.0"
 !define APP_PUBLISHER "USBForge Contributors"
 !define APP_EXE "USBForge.exe"
 !define APP_UNINST "Uninstall.exe"

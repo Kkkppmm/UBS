@@ -31,13 +31,14 @@
 #define ID_RADIO_USB      1021
 #define ID_CREATE         1022
 
-#define COL_BG       RGB(243, 243, 243)
+#define COL_BG       RGB(255, 255, 255)
 #define COL_WHITE    RGB(255, 255, 255)
 #define COL_HEADER   RGB(0, 120, 212)
-#define COL_TEXT     RGB(26, 26, 26)
+#define COL_TEXT     RGB(27, 27, 27)
 #define COL_MUTED    RGB(96, 94, 92)
-#define COL_BORDER   RGB(225, 225, 225)
-#define COL_FOOTER   RGB(249, 249, 249)
+#define COL_BORDER   RGB(229, 229, 229)
+#define COL_FOOTER   RGB(243, 243, 243)
+#define COL_HEADER_FG RGB(255, 255, 255)
 
 static HWND g_hwnd;
 static HWND g_iso;
@@ -47,15 +48,19 @@ static HWND g_status;
 static HWND g_help;
 static HWND g_radio_iso;
 static HWND g_radio_usb;
+static HWND g_header_lbl;
 static UsbDeviceList g_devices;
 static HFONT g_font;
 static HFONT g_title_font;
 static HFONT g_header_font;
+static HFONT g_field_font;
 static HBRUSH g_br_bg;
 static HBRUSH g_br_white;
 static HBRUSH g_br_header;
 static HBRUSH g_br_footer;
+static HBRUSH g_br_border;
 static int g_mode_usb; /* 0=iso hint only, 1=write usb */
+static int g_footer_top;
 
 static void set_status(const char *msg)
 {
@@ -300,92 +305,102 @@ static HWND mk_label(HWND parent, const char *text, int x, int y, int w, int h, 
 static void create_ui(HWND hwnd)
 {
     int y;
+    HWND create_btn, cancel_btn;
 
     g_br_bg = CreateSolidBrush(COL_BG);
     g_br_white = CreateSolidBrush(COL_WHITE);
     g_br_header = CreateSolidBrush(COL_HEADER);
     g_br_footer = CreateSolidBrush(COL_FOOTER);
+    g_br_border = CreateSolidBrush(COL_BORDER);
 
-    g_header_font = CreateFontA(18, 0, 0, 0, FW_SEMIBOLD, 0, 0, 0,
+    g_header_font = CreateFontA(16, 0, 0, 0, FW_SEMIBOLD, 0, 0, 0,
                                 DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, "Segoe UI");
-    g_title_font = CreateFontA(24, 0, 0, 0, FW_SEMIBOLD, 0, 0, 0,
+    g_title_font = CreateFontA(28, 0, 0, 0, FW_SEMIBOLD, 0, 0, 0,
                                DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, "Segoe UI");
-    g_font = CreateFontA(15, 0, 0, 0, FW_NORMAL, 0, 0, 0,
+    g_field_font = CreateFontA(13, 0, 0, 0, FW_SEMIBOLD, 0, 0, 0,
+                               DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, "Segoe UI");
+    g_font = CreateFontA(14, 0, 0, 0, FW_NORMAL, 0, 0, 0,
                          DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, "Segoe UI");
 
-    /* Header bar drawn in WM_PAINT; label on top */
-    mk_label(hwnd, "USBForge Media Creation Tool", 24, 14, 500, 28, g_header_font);
+    g_header_lbl = mk_label(hwnd, "USBForge Setup", 20, 14, 420, 24, g_header_font);
+    mk_label(hwnd, "v" USBFORGE_VERSION, 560, 16, 80, 20, g_font);
 
     y = 64;
-    mk_label(hwnd, "Create USBForge installation media", 24, y, 640, 32, g_title_font);
-    y += 36;
-    mk_label(hwnd, "Choose what to do, then select an ISO and USB drive — like Windows Media Creation Tool.",
-             24, y, 660, 22, g_font);
-    y += 36;
+    mk_label(hwnd, "What do you want to do?", 32, y, 600, 36, g_title_font);
+    y += 40;
+    mk_label(hwnd, "Select an option, choose an ISO, then Create — like Windows Media Creation Tool.",
+             32, y, 600, 22, g_font);
+    y += 34;
 
-    g_radio_iso = CreateWindowA("BUTTON",
-        "Create / download a bootable ISO file (build on Linux or use a release ISO)",
-        WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP,
-        24, y, 660, 24, hwnd, (HMENU)ID_RADIO_ISO, NULL, NULL);
-    SendMessageA(g_radio_iso, WM_SETFONT, (WPARAM)g_font, TRUE);
-    y += 28;
     g_radio_usb = CreateWindowA("BUTTON",
-        "Create bootable USB flash drive (recommended)",
-        WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-        24, y, 660, 24, hwnd, (HMENU)ID_RADIO_USB, NULL, NULL);
+        "Create installation media (USB flash drive)  —  recommended",
+        WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP,
+        32, y, 600, 24, hwnd, (HMENU)ID_RADIO_USB, NULL, NULL);
     SendMessageA(g_radio_usb, WM_SETFONT, (WPARAM)g_font, TRUE);
     SendMessageA(g_radio_usb, BM_SETCHECK, BST_CHECKED, 0);
     g_mode_usb = 1;
+    y += 28;
+    g_radio_iso = CreateWindowA("BUTTON",
+        "Create an ISO file  —  build or save a bootable image on this PC",
+        WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
+        32, y, 600, 24, hwnd, (HMENU)ID_RADIO_ISO, NULL, NULL);
+    SendMessageA(g_radio_iso, WM_SETFONT, (WPARAM)g_font, TRUE);
     y += 40;
 
-    mk_label(hwnd, "ISO file", 24, y, 100, 20, g_font);
-    y += 22;
+    mk_label(hwnd, "ISO file", 32, y, 200, 18, g_field_font);
+    y += 20;
     g_iso = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                             WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
-                            24, y, 520, 28, hwnd, (HMENU)ID_ISO_EDIT, NULL, NULL);
+                            32, y, 500, 28, hwnd, (HMENU)ID_ISO_EDIT, NULL, NULL);
     SendMessageA(g_iso, WM_SETFONT, (WPARAM)g_font, TRUE);
-    mk_btn(hwnd, "Browse", 554, y, 100, 28, ID_BROWSE_ISO);
-    y += 40;
+    mk_btn(hwnd, "Browse", 542, y, 88, 28, ID_BROWSE_ISO);
+    y += 42;
 
-    mk_label(hwnd, "USB flash drive", 24, y, 200, 20, g_font);
-    y += 22;
+    mk_label(hwnd, "Removable drive that will be used", 32, y, 360, 18, g_field_font);
+    y += 20;
     g_usb = CreateWindowA("COMBOBOX", "",
                           WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-                          24, y, 520, 200, hwnd, (HMENU)ID_USB_LIST, NULL, NULL);
+                          32, y, 500, 200, hwnd, (HMENU)ID_USB_LIST, NULL, NULL);
     SendMessageA(g_usb, WM_SETFONT, (WPARAM)g_font, TRUE);
-    mk_btn(hwnd, "Refresh", 554, y, 100, 28, ID_REFRESH);
+    mk_btn(hwnd, "Refresh", 542, y, 88, 28, ID_REFRESH);
     y += 44;
 
-    mk_btn(hwnd, "Create", 24, y, 120, 34, ID_CREATE);
-    mk_btn(hwnd, "Build ISO hint", 156, y, 130, 34, ID_BUILD_HINT);
-    mk_btn(hwnd, "Check updates", 298, y, 130, 34, ID_CHECK_UPDATES);
-    mk_btn(hwnd, "Help docs", 440, y, 100, 34, ID_OPEN_DOCS);
-    y += 48;
+    mk_label(hwnd, "Warning: Everything on the selected USB flash drive will be deleted.",
+             32, y, 600, 20, g_font);
+    y += 28;
 
-    mk_label(hwnd, "Help", 24, y, 100, 20, g_font);
-    y += 22;
-    mk_btn(hwnd, "Getting started", 24, y, 120, 28, ID_TOPIC_START);
-    mk_btn(hwnd, "Write USB", 152, y, 100, 28, ID_TOPIC_WRITE);
-    mk_btn(hwnd, "Safety", 260, y, 90, 28, ID_TOPIC_SAFE);
+    mk_btn(hwnd, "Getting started", 32, y, 120, 28, ID_TOPIC_START);
+    mk_btn(hwnd, "Write USB", 160, y, 100, 28, ID_TOPIC_WRITE);
+    mk_btn(hwnd, "Safety", 268, y, 88, 28, ID_TOPIC_SAFE);
+    mk_btn(hwnd, "Updates", 364, y, 88, 28, ID_CHECK_UPDATES);
+    mk_btn(hwnd, "Docs folder", 460, y, 100, 28, ID_OPEN_DOCS);
     y += 36;
 
     g_help = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                              WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
-                             24, y, 630, 110, hwnd, (HMENU)ID_HELP_VIEW, NULL, NULL);
+                             32, y, 598, 100, hwnd, (HMENU)ID_HELP_VIEW, NULL, NULL);
     SendMessageA(g_help, WM_SETFONT, (WPARAM)g_font, TRUE);
-    y += 120;
+    y += 112;
 
-    mk_label(hwnd, "Status", 24, y, 100, 20, g_font);
-    y += 22;
+    mk_label(hwnd, "Status", 32, y, 100, 18, g_field_font);
+    y += 20;
     g_log = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                             WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
-                            24, y, 630, 90, hwnd, (HMENU)ID_LOG, NULL, NULL);
+                            32, y, 598, 88, hwnd, (HMENU)ID_LOG, NULL, NULL);
     SendMessageA(g_log, WM_SETFONT, (WPARAM)g_font, TRUE);
     y += 100;
 
-    g_status = CreateWindowA("STATIC", "Ready — select an ISO and USB drive, then Create.",
-                             WS_CHILD | WS_VISIBLE, 24, y, 630, 22, hwnd, (HMENU)ID_STATUS, NULL, NULL);
+    g_status = CreateWindowA("STATIC",
+                             "Select an ISO and USB drive, then Create.",
+                             WS_CHILD | WS_VISIBLE, 32, y, 500, 22, hwnd, (HMENU)ID_STATUS, NULL, NULL);
     SendMessageA(g_status, WM_SETFONT, (WPARAM)g_font, TRUE);
+
+    /* MCT-style footer actions */
+    g_footer_top = 628;
+    cancel_btn = mk_btn(hwnd, "Cancel", 32, g_footer_top + 14, 88, 32, ID_BUILD_HINT);
+    create_btn = mk_btn(hwnd, "Create", 542, g_footer_top + 14, 96, 32, ID_CREATE);
+    (void)cancel_btn;
+    (void)create_btn;
 
     load_help_file("getting-started.md");
     refresh_usb();
@@ -402,22 +417,32 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
-        RECT rc, header;
+        RECT rc, header, footer, line;
         GetClientRect(hwnd, &rc);
-        FillRect(hdc, &rc, g_br_bg);
+        FillRect(hdc, &rc, g_br_white);
         header = rc;
-        header.bottom = 52;
+        header.bottom = 48;
         FillRect(hdc, &header, g_br_header);
+        footer = rc;
+        footer.top = (g_footer_top > 0) ? g_footer_top : (rc.bottom - 60);
+        FillRect(hdc, &footer, g_br_footer);
+        line = footer;
+        line.bottom = line.top + 1;
+        FillRect(hdc, &line, g_br_border);
         SetBkMode(hdc, TRANSPARENT);
         EndPaint(hwnd, &ps);
         return 0;
     }
     case WM_CTLCOLORSTATIC: {
         HDC hdc = (HDC)wParam;
+        HWND ctrl = (HWND)lParam;
         SetBkMode(hdc, TRANSPARENT);
-        /* Header labels (~y < 52) rendered white */
+        if (ctrl == g_header_lbl) {
+            SetTextColor(hdc, COL_HEADER_FG);
+            return (LRESULT)g_br_header;
+        }
         SetTextColor(hdc, COL_TEXT);
-        return (LRESULT)g_br_bg;
+        return (LRESULT)g_br_white;
     }
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
@@ -433,11 +458,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         case ID_TOPIC_SAFE: load_help_file("safety.md"); break;
         case ID_RADIO_ISO:
             g_mode_usb = 0;
-            append_log("Mode: create/download ISO (use Build ISO hint or a release ISO).");
+            append_log("Mode: create ISO file.");
             break;
         case ID_RADIO_USB:
             g_mode_usb = 1;
-            append_log("Mode: write bootable USB flash drive.");
+            append_log("Mode: create installation media (USB).");
             break;
         }
         return 0;
@@ -445,10 +470,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         if (g_font) DeleteObject(g_font);
         if (g_title_font) DeleteObject(g_title_font);
         if (g_header_font) DeleteObject(g_header_font);
+        if (g_field_font) DeleteObject(g_field_font);
         if (g_br_bg) DeleteObject(g_br_bg);
         if (g_br_white) DeleteObject(g_br_white);
         if (g_br_header) DeleteObject(g_br_header);
         if (g_br_footer) DeleteObject(g_br_footer);
+        if (g_br_border) DeleteObject(g_br_border);
         PostQuitMessage(0);
         return 0;
     }
@@ -482,13 +509,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrev, LPSTR lpCmd, int nShow)
     wc.hInstance = hInstance;
     wc.lpszClassName = "USBForgeWinBuilder";
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = CreateSolidBrush(COL_BG);
+    wc.hbrBackground = CreateSolidBrush(COL_WHITE);
     RegisterClassA(&wc);
 
     hwnd = CreateWindowExA(0, "USBForgeWinBuilder",
                            "USBForge Media Creation Tool",
                            WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-                           CW_USEDEFAULT, CW_USEDEFAULT, 700, 720,
+                           CW_USEDEFAULT, CW_USEDEFAULT, 680, 740,
                            NULL, NULL, hInstance, NULL);
     ShowWindow(hwnd, nShow);
     UpdateWindow(hwnd);
