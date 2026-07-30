@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>USBForge Setup</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="header">
+      <div class="header-title">USBForge Setup</div>
+      <div class="header-ver" id="version">v—</div>
+    </header>
+
+    <nav class="steps" id="steps" aria-label="Wizard steps">
+      <div class="step on" data-step="0"><span class="dot"></span>Notices</div>
+      <div class="sep"></div>
+      <div class="step" data-step="1"><span class="dot"></span>Options</div>
+      <div class="sep"></div>
+      <div class="step" data-step="2"><span class="dot"></span>Media</div>
+      <div class="sep"></div>
+      <div class="step" data-step="3"><span class="dot"></span>Finish</div>
+    </nav>
+
+    <main class="content">
+      <!-- Notices -->
+      <section class="page active" id="page-welcome">
+        <h1 class="title reveal">Applicable notices and license terms</h1>
+        <p class="sub reveal d1">Review the following notices. Select Accept to continue.</p>
+        <div class="license reveal d2" id="license" tabindex="0">
+          <pre id="license-text"></pre>
+        </div>
+      </section>
+
+      <!-- Mode -->
+      <section class="page" id="page-mode">
+        <h1 class="title">What do you want to do?</h1>
+        <p class="sub">Select an option below, then choose Next to continue.</p>
+        <button type="button" class="option on" id="opt-usb" data-mode="usb">
+          <span class="radio" aria-hidden="true"></span>
+          <span class="opt-text">
+            <strong>Create installation media (USB flash drive)</strong>
+            <span>Write a Windows or Linux ISO you already have to a USB flash drive. Recommended for most people.</span>
+          </span>
+        </button>
+        <button type="button" class="option" id="opt-iso" data-mode="iso">
+          <span class="radio" aria-hidden="true"></span>
+          <span class="opt-text">
+            <strong>Create an ISO file</strong>
+            <span>Build a new USBForge bootable ISO image to save on this PC (advanced).</span>
+          </span>
+        </button>
+      </section>
+
+      <!-- Media -->
+      <section class="page" id="page-media">
+        <h1 class="title" id="media-title">Choose which media to use</h1>
+        <p class="sub" id="media-hint">Select the ISO image and the USB flash drive you want to use.</p>
+
+        <label class="field-label" id="iso-label" for="iso-path">ISO file</label>
+        <div class="row">
+          <input id="iso-path" class="input" type="text" placeholder="Select an ISO file…" autocomplete="off" />
+          <button type="button" class="btn" id="btn-browse">Browse</button>
+        </div>
+
+        <div id="usb-block">
+          <label class="field-label" for="usb-select">Removable drive that will be used</label>
+          <div class="row">
+            <select id="usb-select" class="input select"></select>
+            <button type="button" class="btn" id="btn-refresh">Refresh</button>
+          </div>
+          <div class="warn" id="usb-warn">Warning: Everything on the selected USB flash drive will be deleted.</div>
+        </div>
+
+        <button type="button" class="link" id="btn-verify">Verify ISO file</button>
+      </section>
+
+      <!-- Progress -->
+      <section class="page" id="page-progress">
+        <h1 class="title" id="progress-title">Creating your media</h1>
+        <p class="sub" id="progress-sub">This might take a while — keep this window open until the process finishes.</p>
+        <div class="activity" id="activity" hidden>Working…</div>
+        <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+        <p class="status" id="status">Getting things ready…</p>
+        <div class="banner" id="banner" hidden></div>
+        <div class="warn" id="progress-warn">Do not remove the USB flash drive or close this window while Creating is in progress.</div>
+        <details class="details" open>
+          <summary>Details</summary>
+          <pre class="log" id="log"></pre>
+        </details>
+      </section>
+
+      <!-- Help -->
+      <section class="page" id="page-help">
+        <h1 class="title">Help</h1>
+        <div class="topic-row">
+          <button type="button" class="btn" data-topic="getting-started.md">Getting started</button>
+          <button type="button" class="btn" data-topic="create-iso.md">Create ISO</button>
+          <button type="button" class="btn" data-topic="write-usb.md">Write USB</button>
+          <button type="button" class="btn" data-topic="safety.md">Safety</button>
+        </div>
+        <pre class="help" id="help-text">Loading…</pre>
+      </section>
+    </main>
+
+    <footer class="footer" id="footer">
+      <!-- filled by JS per page -->
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
