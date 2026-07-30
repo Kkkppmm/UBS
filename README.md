@@ -9,21 +9,23 @@
 | `usbforge-builder` | Host GUI (Linux/WebKit): HTML/CSS/JS Media Creation Tool wizard |
 | `usbforge-live` | Live/boot GUI: USB probe, read-speed test, diagnostics, docs |
 | `USBForge.exe` | Windows writer + help (NSIS installer / portable zip) |
+| **USBForge Companion** | Android APK: releases, app updates, feedback, community |
 | `scripts/build-iso.sh` | Packages a GRUB-bootable ISO |
 
 ## Quick start (Linux)
 
 ```bash
-sudo apt-get install -y build-essential pkg-config libgtk-3-dev \
+sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev \
     xorriso grub-common grub-pc-bin mtools
 
 make
 make smoke
 make iso                 # -> build/usbforge.iso
-./build/usbforge-builder
+./build/usbforge-builder   # WebKit + ui/builder (HTML/CSS/JS)
 ./build/usbforge-live
 ```
 
+The Builder UI lives in `ui/builder/` (`index.html`, `styles.css`, `app.js`) and is embedded with WebKitGTK.
 ## Release packages
 
 ```bash
@@ -49,15 +51,29 @@ See **docs/packages.md** for install commands and distro notes.
 2. Write it to USB (Linux Builder or Windows app).
 3. Boot from USB -> GRUB / Live USB Lab (test & docs first; install optional).
 
+## Android Companion
+
+Sideload `android/dist/USBForge-Companion-1.0.0.apk` (or build with `cd android && ./gradlew assembleRelease`).
+
+- View USBForge release notes and download assets from GitHub
+- In-app Companion update checks
+- Sign up / sign in to post in the community feed
+- Send star-rated feedback
+
+Optional cloud backend: `community-api/` (Cloudflare Worker + D1). See **docs/android-companion.md**.
+
 ## Project layout
 
 ```
-common/      Shared C helpers (Linux + Windows)
-host/        Builder GUI (GTK3) + Windows Win32 builder
-live/        Live USB Lab GUI (GTK3)
-docs/        In-app help topics
-packaging/   Linux deb/rpm/arch + Windows NSIS
-scripts/     ISO build, release, Windows write helper
+common/         Shared C helpers (Linux + Windows)
+host/           Builder GUI (WebKit/GTK) + Windows Win32 builder
+live/           Live USB Lab GUI (GTK3)
+android/        Companion APK (WebView + HTML UI)
+community-api/  Cloudflare Worker API for auth/community/updates
+docs/           In-app help topics + Companion guide
+packaging/      Linux deb/rpm/arch + Windows NSIS
+scripts/        ISO build, release, Windows write helper
+ui/builder/     Builder HTML/CSS/JS
 ```
 
 ## Safety

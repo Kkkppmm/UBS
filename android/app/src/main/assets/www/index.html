@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>USBForge Companion</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="top">
+      <div>
+        <div class="brand">USBForge</div>
+        <div class="tag">Companion</div>
+      </div>
+      <button type="button" class="chip" id="btn-account">Sign in</button>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button type="button" class="tab on" data-tab="updates">Updates</button>
+      <button type="button" class="tab" data-tab="community">Community</button>
+      <button type="button" class="tab" data-tab="feedback">Feedback</button>
+      <button type="button" class="tab" data-tab="account">Account</button>
+    </nav>
+
+    <main class="main">
+      <section class="panel on" id="panel-updates">
+        <div class="card accent" id="app-update-card">
+          <div class="eyebrow">App update</div>
+          <h2 id="app-update-title">Checking…</h2>
+          <p id="app-update-body" class="muted">Looking for Companion releases.</p>
+          <div class="row">
+            <button type="button" class="btn primary" id="btn-check-update">Check again</button>
+            <a class="btn" id="btn-download-apk" href="#" hidden target="_blank" rel="noopener">Download APK</a>
+          </div>
+        </div>
+
+        <div class="card" id="desktop-card">
+          <div class="eyebrow">Desktop / USBForge releases</div>
+          <h2 id="desktop-title">Latest USBForge</h2>
+          <p id="desktop-meta" class="muted"></p>
+          <pre id="desktop-notes" class="notes"></pre>
+          <a class="btn primary" id="btn-desktop-release" href="#" target="_blank" rel="noopener">Open release</a>
+          <div id="asset-list" class="assets"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-community">
+        <div class="card">
+          <div class="row between">
+            <h2>Community</h2>
+            <button type="button" class="btn primary" id="btn-new-post">New post</button>
+          </div>
+          <p class="muted">Share tips, ISO workflows, questions, and feedback with other USBForge users.</p>
+        </div>
+        <div id="post-composer" class="card composer" hidden>
+          <input id="post-title" class="input" placeholder="Title" maxlength="120" />
+          <select id="post-kind" class="input">
+            <option value="share">Share</option>
+            <option value="tip">Tip</option>
+            <option value="question">Question</option>
+            <option value="feedback">Feedback</option>
+          </select>
+          <textarea id="post-body" class="input area" rows="5" placeholder="Write your post…"></textarea>
+          <div class="row">
+            <button type="button" class="btn primary" id="btn-submit-post">Publish</button>
+            <button type="button" class="btn" id="btn-cancel-post">Cancel</button>
+          </div>
+        </div>
+        <div id="posts" class="feed"></div>
+      </section>
+
+      <section class="panel" id="panel-feedback">
+        <div class="card">
+          <h2>Send feedback</h2>
+          <p class="muted">Tell us what works, what’s broken, or what you want next.</p>
+          <div class="stars" id="stars">
+            <button type="button" data-r="1">★</button>
+            <button type="button" data-r="2">★</button>
+            <button type="button" data-r="3">★</button>
+            <button type="button" data-r="4">★</button>
+            <button type="button" data-r="5">★</button>
+          </div>
+          <textarea id="feedback-msg" class="input area" rows="6" placeholder="Your feedback…"></textarea>
+          <input id="feedback-email" class="input" placeholder="Email (optional if signed in)" />
+          <button type="button" class="btn primary" id="btn-send-feedback">Submit feedback</button>
+          <p id="feedback-status" class="muted"></p>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-account">
+        <div class="card" id="auth-signed-out">
+          <h2 id="auth-title">Sign in</h2>
+          <div class="seg">
+            <button type="button" class="seg-btn on" data-mode="signin">Sign in</button>
+            <button type="button" class="seg-btn" data-mode="signup">Sign up</button>
+          </div>
+          <input id="auth-name" class="input" placeholder="Display name" hidden />
+          <input id="auth-email" class="input" type="email" placeholder="Email" autocomplete="username" />
+          <input id="auth-pass" class="input" type="password" placeholder="Password (8+ chars)" autocomplete="current-password" />
+          <button type="button" class="btn primary" id="btn-auth">Sign in</button>
+          <p id="auth-status" class="muted"></p>
+        </div>
+        <div class="card" id="auth-signed-in" hidden>
+          <h2>Signed in</h2>
+          <p id="whoami"></p>
+          <button type="button" class="btn" id="btn-signout">Sign out</button>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+  </div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

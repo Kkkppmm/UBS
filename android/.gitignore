@@ -1,0 +1,7 @@
+# Ignore local Gradle/SDK state — tracked files live under app/ and dist/
+local.properties
+.gradle/
+**/build/
+*.jks
+*.keystore
+dist/*.idsig

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="uf_blue">#0078D4</color>
+    <color name="uf_blue_dark">#0B5CAB</color>
+    <color name="uf_canvas">#F3F2F1</color>
+    <color name="ic_launcher_background">#0078D4</color>
+</resources>

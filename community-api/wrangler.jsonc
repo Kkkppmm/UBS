@@ -1,0 +1,19 @@
+{
+  "name": "usbforge-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_NAME": "USBForge Companion",
+    "APP_VERSION": "1.0.0",
+    "GITHUB_REPO": "Kkkppmm/UBS",
+    "ANDROID_LATEST_TAG": "android-1.0.0"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "usbforge-community",
+      "database_id": "d9acd11f-bc4d-4045-92fa-ba354e3d4bd3"
+    }
+  ]
+}
