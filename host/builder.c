@@ -1,218 +1,188 @@
 /*
- * USBForge Builder — Windows Media Creation Tool style wizard (GTK3).
+ * USBForge Builder — Media Creation Tool (WebKitGTK + HTML/CSS/JS UI).
  */
 #include <gtk/gtk.h>
+#include <webkit2/webkit2.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
-#include <sys/wait.h>
+#include <sys/stat.h>
 
 #include "usbforge.h"
-#include "uf_theme.h"
-
-typedef enum {
-    MODE_CREATE_ISO = 0,
-    MODE_WRITE_USB = 1
-} WizardMode;
 
 typedef struct {
     GtkWidget *window;
-    GtkWidget *stack;
-    GtkWidget *status;
-    GtkWidget *progress;
-    GtkWidget *progress_title;
-    GtkWidget *progress_sub;
-    GtkWidget *result_banner;
-    GtkWidget *activity_label;
-    GtkWidget *log_view;
-    GtkTextBuffer *log_buf;
-    GtkWidget *iso_entry;
-    GtkWidget *iso_label;
-    GtkWidget *usb_combo;
-    GtkWidget *help_view;
-    GtkTextBuffer *help_buf;
-    GtkListStore *usb_store;
-    GtkWidget *radio_iso;
-    GtkWidget *radio_usb;
-    GtkWidget *tile_iso;
-    GtkWidget *tile_usb;
-    GtkWidget *media_hint;
-    GtkWidget *usb_row;
-    GtkWidget *usb_label;
-    GtkWidget *page_title;
-    GtkWidget *create_btn;
-    GtkWidget *finish_btn;
-    GtkWidget *progress_back_btn;
-    UfStepRail steps;
+    WebKitWebView *web;
     UsbDeviceList devices;
-    WizardMode mode;
     int busy;
-    double progress_target;
-    guint progress_anim_id;
+    int alive;           /* 0 after window destroy */
+    unsigned job_gen;    /* ignore stale job callbacks */
+    char ui_dir[USBFORGE_MAX_PATH];
 } App;
 
 static App app;
 
-static void on_show_page(const char *name);
-static void on_build_iso(void);
-static void on_write_usb(void);
-static gboolean pulse_progress(gpointer data);
-
-static void append_log(const char *msg)
+static char *json_escape(const char *s)
 {
-    GtkTextIter end;
-    gchar *line;
-
-    if (!app.log_buf || !msg)
-        return;
-
-    line = g_strdup_printf("%s\n", msg);
-    gtk_text_buffer_get_end_iter(app.log_buf, &end);
-    gtk_text_buffer_insert(app.log_buf, &end, line, -1);
-    g_free(line);
-
-    if (app.status)
-        gtk_label_set_text(GTK_LABEL(app.status), msg);
-}
-
-static void set_progress_classes(const char *klass)
-{
-    GtkStyleContext *ctx;
-    if (!app.progress)
-        return;
-    ctx = gtk_widget_get_style_context(app.progress);
-    gtk_style_context_remove_class(ctx, "uf-busy");
-    gtk_style_context_remove_class(ctx, "uf-done");
-    gtk_style_context_remove_class(ctx, "uf-fail");
-    if (klass && *klass)
-        gtk_style_context_add_class(ctx, klass);
-}
-
-static gboolean animate_progress(gpointer data)
-{
-    double cur;
-    (void)data;
-    if (!app.progress)
-        return G_SOURCE_REMOVE;
-    cur = gtk_progress_bar_get_fraction(GTK_PROGRESS_BAR(app.progress));
-    if (cur + 0.025 >= app.progress_target) {
-        gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(app.progress), app.progress_target);
-        app.progress_anim_id = 0;
-        return G_SOURCE_REMOVE;
-    }
-    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(app.progress), cur + 0.025);
-    return G_SOURCE_CONTINUE;
-}
-
-static void set_progress_smooth(double target)
-{
-    if (target < 0.0) target = 0.0;
-    if (target > 1.0) target = 1.0;
-    app.progress_target = target;
-    if (app.progress_anim_id)
-        g_source_remove(app.progress_anim_id);
-    app.progress_anim_id = g_timeout_add(40, animate_progress, NULL);
-}
-
-static void show_result_banner(int ok, const char *msg)
-{
-    GtkStyleContext *ctx;
-    if (!app.result_banner)
-        return;
-    ctx = gtk_widget_get_style_context(app.result_banner);
-    gtk_style_context_remove_class(ctx, "uf-success-banner");
-    gtk_style_context_remove_class(ctx, "uf-error-banner");
-    gtk_style_context_add_class(ctx, ok ? "uf-success-banner" : "uf-error-banner");
-    gtk_label_set_text(GTK_LABEL(app.result_banner), msg);
-    gtk_widget_show(app.result_banner);
-    uf_reveal(app.result_banner);
-}
-
-static void set_busy(int busy)
-{
-    app.busy = busy;
-    if (app.progress) {
-        if (busy) {
-            set_progress_classes("uf-busy");
-            set_progress_smooth(0.08);
+    GString *out = g_string_new(NULL);
+    const unsigned char *p;
+    if (!s) return g_strdup("");
+    for (p = (const unsigned char *)s; *p; p++) {
+        switch (*p) {
+        case '\\': g_string_append(out, "\\\\"); break;
+        case '"':  g_string_append(out, "\\\""); break;
+        case '\n': g_string_append(out, "\\n"); break;
+        case '\r': g_string_append(out, "\\r"); break;
+        case '\t': g_string_append(out, "\\t"); break;
+        default:
+            if (*p < 0x20)
+                g_string_append_printf(out, "\\u%04x", *p);
+            else
+                g_string_append_c(out, (char)*p);
+            break;
         }
     }
-    if (app.activity_label) {
-        if (busy) {
-            gtk_label_set_text(GTK_LABEL(app.activity_label), "Working…");
-            gtk_widget_show(app.activity_label);
-        } else {
-            gtk_widget_hide(app.activity_label);
-        }
-    }
-    if (app.progress_back_btn)
-        gtk_widget_set_sensitive(app.progress_back_btn, !busy);
-    if (app.finish_btn)
-        gtk_widget_set_sensitive(app.finish_btn, !busy);
-    if (app.result_banner && busy)
-        gtk_widget_hide(app.result_banner);
+    return g_string_free(out, FALSE);
 }
 
-static void load_help_topic(const char *topic)
+static void ui_send_raw(const char *js_arg_json)
+{
+    char *script;
+    if (!app.alive || !app.web || !js_arg_json)
+        return;
+    script = g_strdup_printf("window.UF && window.UF.receive(%s);", js_arg_json);
+    webkit_web_view_evaluate_javascript(app.web, script, -1, NULL, NULL, NULL, NULL, NULL);
+    g_free(script);
+}
+
+static void ui_send_event(const char *json_object)
+{
+    ui_send_raw(json_object);
+}
+
+static void ui_log(const char *text)
+{
+    char *esc = json_escape(text);
+    char *json = g_strdup_printf("{\"event\":\"log\",\"text\":\"%s\"}", esc);
+    ui_send_event(json);
+    g_free(esc);
+    g_free(json);
+}
+
+static void ui_progress(int percent, const char *klass)
+{
+    char *json = g_strdup_printf(
+        "{\"event\":\"progress\",\"percent\":%d,\"klass\":\"%s\"}",
+        percent, klass ? klass : "");
+    ui_send_event(json);
+    g_free(json);
+}
+
+static int find_ui_dir(char *out, int outlen)
+{
+    const char *cands[] = {
+        "ui/builder",
+        "/usr/share/usbforge/ui/builder",
+        "/usr/local/share/usbforge/ui/builder",
+        "/usbforge/ui/builder",
+        NULL
+    };
+    int i;
+    char probe[USBFORGE_MAX_PATH];
+    for (i = 0; cands[i]; i++) {
+        snprintf(probe, sizeof(probe), "%s/index.html", cands[i]);
+        if (uf_file_exists(probe)) {
+            snprintf(out, outlen, "%s", cands[i]);
+            return 0;
+        }
+    }
+    /* Relative to executable */
+    {
+        char exe[USBFORGE_MAX_PATH];
+        ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+        if (n > 0) {
+            char *slash;
+            exe[n] = '\0';
+            slash = strrchr(exe, '/');
+            if (slash) {
+                *slash = '\0';
+                snprintf(probe, sizeof(probe), "%s/../share/usbforge/ui/builder/index.html", exe);
+                if (uf_file_exists(probe)) {
+                    snprintf(out, outlen, "%s/../share/usbforge/ui/builder", exe);
+                    return 0;
+                }
+                snprintf(probe, sizeof(probe), "%s/../../ui/builder/index.html", exe);
+                if (uf_file_exists(probe)) {
+                    snprintf(out, outlen, "%s/../../ui/builder", exe);
+                    return 0;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
+static void send_usb_list(void)
+{
+    GString *json;
+    int i, n = 0;
+    char *esc;
+
+    uf_scan_usb_devices(&app.devices);
+    json = g_string_new("{\"event\":\"usb_list\",\"devices\":[");
+    for (i = 0; i < app.devices.count; i++) {
+        UsbDevice *d = &app.devices.devices[i];
+        char *p, *m, *s;
+        if (!d->is_usb && !d->removable)
+            continue;
+        if (n++)
+            g_string_append_c(json, ',');
+        p = json_escape(d->path);
+        m = json_escape(d->model[0] ? d->model : d->name);
+        s = json_escape(d->size);
+        g_string_append_printf(json,
+            "{\"path\":\"%s\",\"model\":\"%s\",\"size\":\"%s\"}", p, m, s);
+        g_free(p); g_free(m); g_free(s);
+    }
+    g_string_append(json, "]}");
+    ui_send_event(json->str);
+    g_string_free(json, TRUE);
+    (void)esc;
+}
+
+static void send_help(const char *topic)
 {
     char path[USBFORGE_MAX_PATH];
     char *content = NULL;
     gsize len = 0;
     const char *docs = uf_docs_path(NULL);
+    char *esc;
+    char *json;
 
-    if (topic && *topic)
-        snprintf(path, sizeof(path), "%s/%s", docs, topic);
-    else
-        snprintf(path, sizeof(path), "%s/index.md", docs);
-
-    if (g_file_get_contents(path, &content, &len, NULL)) {
-        gtk_text_buffer_set_text(app.help_buf, content, (gint)len);
-        g_free(content);
-    } else {
-        gtk_text_buffer_set_text(app.help_buf,
-            "USBForge Help\n\n"
-            "Use this wizard like Windows Media Creation Tool:\n"
-            "1. Choose Create ISO or Write to USB\n"
-            "2. Select paths\n"
-            "3. Click Create / Write\n", -1);
+    if (!topic || !*topic)
+        topic = "getting-started.md";
+    snprintf(path, sizeof(path), "%s/%s", docs, topic);
+    if (!g_file_get_contents(path, &content, &len, NULL)) {
+        content = g_strdup("Help topic not found.\nSee docs/ in the USBForge package.");
     }
+    esc = json_escape(content);
+    json = g_strdup_printf("{\"event\":\"help\",\"text\":\"%s\"}", esc);
+    ui_send_event(json);
+    g_free(content);
+    g_free(esc);
+    g_free(json);
 }
 
-static void refresh_usb_list(void)
-{
-    int i;
-    GtkTreeIter iter;
-
-    if (!app.usb_store)
-        return;
-
-    gtk_list_store_clear(app.usb_store);
-    uf_scan_usb_devices(&app.devices);
-
-    for (i = 0; i < app.devices.count; i++) {
-        UsbDevice *d = &app.devices.devices[i];
-        gchar *label;
-        if (!d->is_usb && !d->removable)
-            continue;
-        label = g_strdup_printf("%s  —  %s (%s)", d->path, d->model, d->size);
-        gtk_list_store_append(app.usb_store, &iter);
-        gtk_list_store_set(app.usb_store, &iter, 0, label, 1, d->path, -1);
-        g_free(label);
-    }
-
-    if (gtk_tree_model_get_iter_first(GTK_TREE_MODEL(app.usb_store), &iter))
-        gtk_combo_box_set_active(GTK_COMBO_BOX(app.usb_combo), 0);
-
-    append_log("USB device list refreshed.");
-}
+/* ---- background jobs ---- */
 
 typedef struct {
-    char cmd[USBFORGE_MAX_PATH * 2];
-    char success_msg[256];
+    char cmd[USBFORGE_MAX_PATH * 3];
+    char ok_msg[256];
     char fail_msg[256];
+    unsigned gen;
 } Job;
 
 typedef struct {
@@ -224,47 +194,38 @@ typedef struct {
 static gboolean on_job_done(gpointer data)
 {
     JobResult *r = data;
+    char *esc;
+    char *json;
+
+    if (!app.alive || r->job->gen != app.job_gen) {
+        g_free(r->output);
+        g_free(r->job);
+        g_free(r);
+        return G_SOURCE_REMOVE;
+    }
+
     if (r->output && r->output[0]) {
-        append_log("--- command output ---");
-        append_log(r->output);
-        append_log("--- end output ---");
+        ui_log("--- command output ---");
+        ui_log(r->output);
+        ui_log("--- end output ---");
     }
-    if (r->rc == 0) {
-        append_log(r->job->success_msg);
-        set_progress_classes("uf-done");
-        set_progress_smooth(1.0);
-        if (app.progress_title)
-            gtk_label_set_text(GTK_LABEL(app.progress_title), "Your media is ready");
-        if (app.progress_sub)
-            gtk_label_set_text(GTK_LABEL(app.progress_sub),
-                "You can remove the USB drive safely, or create another.");
-        show_result_banner(1, r->job->success_msg);
-        uf_step_rail_set(&app.steps, 3);
-        if (app.finish_btn) {
-            gtk_button_set_label(GTK_BUTTON(app.finish_btn), "Finish");
-            gtk_widget_set_sensitive(app.finish_btn, TRUE);
-        }
-    } else {
-        append_log(r->job->fail_msg);
-        set_progress_classes("uf-fail");
-        set_progress_smooth(0.15);
-        if (app.progress_title)
-            gtk_label_set_text(GTK_LABEL(app.progress_title), "Something went wrong");
-        if (app.progress_sub)
-            gtk_label_set_text(GTK_LABEL(app.progress_sub),
-                "Check the details below, then go Back and try again.");
-        show_result_banner(0, r->job->fail_msg);
-        if (app.finish_btn)
-            gtk_button_set_label(GTK_BUTTON(app.finish_btn), "Try again");
-    }
-    set_busy(0);
+
+    app.busy = 0;
+    esc = json_escape(r->rc == 0 ? r->job->ok_msg : r->job->fail_msg);
+    json = g_strdup_printf(
+        "{\"event\":\"job_done\",\"ok\":%s,\"message\":\"%s\"}",
+        r->rc == 0 ? "true" : "false", esc);
+    ui_send_event(json);
+    g_free(esc);
+    g_free(json);
+
     g_free(r->output);
     g_free(r->job);
     g_free(r);
     return G_SOURCE_REMOVE;
 }
 
-static gpointer job_thread_portable(gpointer data)
+static gpointer job_thread(gpointer data)
 {
     Job *job = data;
     JobResult *r = g_new0(JobResult, 1);
@@ -280,44 +241,63 @@ static gpointer job_thread_portable(gpointer data)
     return NULL;
 }
 
-static void start_job(const char *cmd, const char *ok, const char *fail)
+static int start_job(const char *cmd, const char *ok, const char *fail)
 {
     Job *job;
     pthread_t thr;
+    int prc;
 
     if (app.busy) {
-        append_log("A job is already running. Please wait.");
-        return;
+        ui_log("A job is already running. Please wait.");
+        return -1;
     }
-
     job = g_new0(Job, 1);
     snprintf(job->cmd, sizeof(job->cmd), "%s", cmd);
-    snprintf(job->success_msg, sizeof(job->success_msg), "%s", ok);
+    snprintf(job->ok_msg, sizeof(job->ok_msg), "%s", ok);
     snprintf(job->fail_msg, sizeof(job->fail_msg), "%s", fail);
-
-    set_busy(1);
-    append_log("Working...");
-    append_log(cmd);
-    g_timeout_add(120, pulse_progress, NULL);
-    pthread_create(&thr, NULL, job_thread_portable, job);
+    job->gen = ++app.job_gen;
+    app.busy = 1;
+    ui_log("Working…");
+    ui_log(cmd);
+    ui_progress(10, "busy");
+    prc = pthread_create(&thr, NULL, job_thread, job);
+    if (prc != 0) {
+        app.busy = 0;
+        ui_log("Could not start background worker.");
+        g_free(job);
+        return -1;
+    }
     pthread_detach(thr);
+    return 0;
 }
 
-static void on_browse_iso(GtkButton *btn, gpointer user_data)
+static char *shell_single_quote(const char *s)
+{
+    GString *out = g_string_new("'");
+    for (; s && *s; s++) {
+        if (*s == '\'')
+            g_string_append(out, "'\\''");
+        else
+            g_string_append_c(out, *s);
+    }
+    g_string_append_c(out, '\'');
+    return g_string_free(out, FALSE);
+}
+
+static void do_browse(const char *mode)
 {
     GtkWidget *dialog;
     gint res;
-    (void)btn;
-    (void)user_data;
+    int save = mode && !strcmp(mode, "save");
 
     dialog = gtk_file_chooser_dialog_new(
-        app.mode == MODE_CREATE_ISO ? "Choose ISO save location" : "Select ISO file",
+        save ? "Choose ISO save location" : "Select ISO file",
         GTK_WINDOW(app.window),
-        app.mode == MODE_CREATE_ISO ? GTK_FILE_CHOOSER_ACTION_SAVE : GTK_FILE_CHOOSER_ACTION_OPEN,
+        save ? GTK_FILE_CHOOSER_ACTION_SAVE : GTK_FILE_CHOOSER_ACTION_OPEN,
         "_Cancel", GTK_RESPONSE_CANCEL,
-        app.mode == MODE_CREATE_ISO ? "_Select" : "_Open", GTK_RESPONSE_ACCEPT,
+        save ? "_Select" : "_Open", GTK_RESPONSE_ACCEPT,
         NULL);
-    if (app.mode == MODE_CREATE_ISO) {
+    if (save) {
         gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(dialog), "usbforge.iso");
         gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(dialog), TRUE);
     } else {
@@ -327,80 +307,77 @@ static void on_browse_iso(GtkButton *btn, gpointer user_data)
         gtk_file_filter_add_pattern(filter, "*.ISO");
         gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
     }
-
     res = gtk_dialog_run(GTK_DIALOG(dialog));
     if (res == GTK_RESPONSE_ACCEPT) {
         char *file = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-        gtk_entry_set_text(GTK_ENTRY(app.iso_entry), file);
-        g_free(file);
+        char *esc = json_escape(file);
+        char *json = g_strdup_printf("{\"event\":\"iso_chosen\",\"path\":\"%s\"}", esc);
+        ui_send_event(json);
+        g_free(file); g_free(esc); g_free(json);
     }
     gtk_widget_destroy(dialog);
 }
 
-static char *selected_usb_path(void)
+static void do_verify(const char *iso)
 {
-    GtkTreeIter iter;
-    gchar *path = NULL;
-    if (!gtk_combo_box_get_active_iter(GTK_COMBO_BOX(app.usb_combo), &iter))
-        return NULL;
-    gtk_tree_model_get(GTK_TREE_MODEL(app.usb_store), &iter, 1, &path, -1);
-    return path;
-}
-
-static void on_build_iso(void)
-{
-    const char *iso;
-    const char *script;
+    char *q;
     char cmd[USBFORGE_MAX_PATH * 3];
-
-    iso = gtk_entry_get_text(GTK_ENTRY(app.iso_entry));
-    if (!iso || !*iso) {
-        append_log("Please choose an output ISO path first (example: ~/usbforge.iso).");
+    if (!iso || !*iso || !uf_file_exists(iso)) {
+        ui_send_event("{\"event\":\"job_done\",\"ok\":false,\"message\":\"Choose a valid ISO file first.\"}");
         return;
     }
-
-    /* Don't overwrite an existing Windows/other ISO by "building" into it */
-    if (uf_file_exists(iso) && uf_iso_is_windows(iso)) {
-        append_log("That file is an existing Windows ISO.");
-        append_log("To make a bootable USB from it: go Back, choose "
-                   "'Write an existing ISO to USB flash drive', then Create.");
-        append_log("To build a NEW USBForge ISO, pick a different output path "
-                   "like ~/Downloads/usbforge.iso");
-        return;
-    }
-
-    script = uf_find_script("build-iso.sh");
-    if (!script) {
-        append_log("Could not find build-iso.sh.");
-        append_log("Expected in /usr/share/usbforge/scripts/ or ./scripts/");
-        return;
-    }
-
-    snprintf(cmd, sizeof(cmd), "bash '%s' '%s' 2>&1", script, iso);
-    start_job(cmd, "USBForge ISO created successfully. You can write it to a USB drive next.",
-              "ISO build failed. See log above (needs xorriso + grub-mkrescue).");
+    q = shell_single_quote(iso);
+    /* Avoid "| head" so pipeline status reflects xorriso, not head */
+    snprintf(cmd, sizeof(cmd),
+             "bash -c 'set -o pipefail; xorriso -indev %s -find / -exec report_lba -- 2>&1 | sed -n \"1,40p\"'",
+             q);
+    g_free(q);
+    start_job(cmd, "ISO verification finished.", "Could not verify ISO (is xorriso installed?).");
 }
 
-static void on_write_usb(void)
+static void do_create(const char *mode, const char *iso, const char *usb)
 {
-    const char *iso;
-    char *usb;
-    const char *script;
+    char *qi, *qu;
     char cmd[USBFORGE_MAX_PATH * 4];
+    const char *script;
+    int is_win;
     GtkWidget *confirm;
     gint res;
-    int is_win;
 
-    iso = gtk_entry_get_text(GTK_ENTRY(app.iso_entry));
-    usb = selected_usb_path();
-
-    if (!iso || !*iso || !uf_file_exists(iso)) {
-        append_log("Choose a valid ISO file before writing.");
-        g_free(usb);
+    if (!iso || !*iso) {
+        ui_send_event("{\"event\":\"job_done\",\"ok\":false,\"message\":\"Choose an ISO path first.\"}");
         return;
     }
-    if (!usb) {
-        append_log("Select a USB flash drive first.");
+
+    if (mode && !strcmp(mode, "iso")) {
+        char *qs;
+        if (uf_file_exists(iso) && uf_iso_is_windows(iso)) {
+            ui_send_event("{\"event\":\"job_done\",\"ok\":false,\"message\":\"That file is an existing Windows ISO. Choose Write to USB, or pick a different output path.\"}");
+            return;
+        }
+        script = uf_find_script("build-iso.sh");
+        if (!script) {
+            ui_send_event("{\"event\":\"job_done\",\"ok\":false,\"message\":\"Could not find build-iso.sh.\"}");
+            return;
+        }
+        qi = shell_single_quote(iso);
+        qs = shell_single_quote(script);
+        snprintf(cmd, sizeof(cmd), "bash %s %s 2>&1", qs, qi);
+        g_free(qs);
+        g_free(qi);
+        start_job(cmd,
+                  "USBForge ISO created successfully. You can write it to a USB drive next.",
+                  "ISO build failed. See log (needs xorriso + grub-mkrescue).");
+        return;
+    }
+
+    /* Write USB */
+    if (!usb || !*usb) {
+        ui_send_event("{\"event\":\"job_done\",\"ok\":false,\"message\":\"Select a USB flash drive first.\"}");
+        return;
+    }
+    if (!uf_file_exists(iso)) {
+        ui_send_event("{\"event\":\"job_done\",\"ok\":false,\"message\":\"Choose a valid ISO file before writing.\"}");
         return;
     }
 
@@ -409,700 +386,229 @@ static void on_write_usb(void)
         GTK_WINDOW(app.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
         "Everything on %s will be deleted.\n\n"
         "%s bootable media will be created from:\n%s",
-        usb,
-        is_win ? "Windows" : "ISO",
-        iso);
+        usb, is_win ? "Windows" : "ISO", iso);
     res = gtk_dialog_run(GTK_DIALOG(confirm));
     gtk_widget_destroy(confirm);
     if (res != GTK_RESPONSE_OK) {
-        append_log("Write cancelled.");
-        g_free(usb);
-        on_show_page("media");
+        ui_send_event("{\"event\":\"job_cancelled\"}");
+        ui_log("Write cancelled.");
         return;
     }
 
     script = uf_find_script("write-media.sh");
+    qi = shell_single_quote(iso);
+    qu = shell_single_quote(usb);
     if (script) {
-        snprintf(cmd, sizeof(cmd),
-                 "pkexec bash '%s' '%s' '%s' 2>&1", script, iso, usb);
+        char *qs = shell_single_quote(script);
+        snprintf(cmd, sizeof(cmd), "pkexec bash %s %s %s 2>&1", qs, qi, qu);
+        g_free(qs);
         start_job(cmd,
                   is_win
                       ? "Windows USB media is ready. You can boot from this drive."
                       : "USB media is ready. You can boot from this drive.",
-                  "USB write failed. See log (needs pkexec; Windows ISOs also need parted, dosfstools, rsync; large WIMs need wimtools).");
+                  "USB write failed. See log (needs pkexec; Windows ISOs need parted, dosfstools, rsync; large WIMs need wimtools).");
     } else {
-        append_log("write-media.sh not found — falling back to raw dd.");
         snprintf(cmd, sizeof(cmd),
-                 "pkexec dd if='%s' of='%s' bs=4M status=progress conv=fsync oflag=direct 2>&1",
-                 iso, usb);
-        start_job(cmd, "USB media is ready (raw dd).",
-                  "USB write failed. You may need administrator rights.");
+                 "pkexec dd if=%s of=%s bs=4M status=progress conv=fsync 2>&1", qi, qu);
+        start_job(cmd, "USB write finished (raw dd).", "USB write failed.");
     }
-    g_free(usb);
+    g_free(qi);
+    g_free(qu);
 }
 
-static void on_verify(void)
-{
-    const char *iso;
-    char cmd[USBFORGE_MAX_PATH * 2];
-
-    iso = gtk_entry_get_text(GTK_ENTRY(app.iso_entry));
-    if (!iso || !*iso || !uf_file_exists(iso)) {
-        append_log("Choose an existing ISO to verify.");
-        return;
-    }
-    snprintf(cmd, sizeof(cmd),
-             "xorriso -indev \"%s\" -find / -exec report_lba -- 2>&1 | head -n 40", iso);
-    start_job(cmd, "ISO verification finished.", "Could not verify ISO.");
-}
-
-static void on_refresh_clicked(GtkButton *btn, gpointer user_data)
-{
-    (void)btn;
-    (void)user_data;
-    refresh_usb_list();
-}
-
-static void on_verify_clicked(GtkButton *btn, gpointer user_data)
-{
-    (void)btn;
-    (void)user_data;
-    on_verify();
-}
-
-static gboolean pulse_progress(gpointer data)
-{
-    (void)data;
-    if (!app.busy)
-        return G_SOURCE_REMOVE;
-    if (app.progress) {
-        double cur = gtk_progress_bar_get_fraction(GTK_PROGRESS_BAR(app.progress));
-        /* Creep toward ~85% while work runs; finish snaps to 100% on success */
-        if (cur < 0.85)
-            set_progress_smooth(cur + 0.035);
-    }
-    return G_SOURCE_CONTINUE;
-}
-
-static void on_show_page(const char *name)
-{
-    int step = 0;
-    GtkWidget *page;
-
-    if (!name)
-        return;
-
-    if (!strcmp(name, "welcome"))
-        step = 0;
-    else if (!strcmp(name, "mode"))
-        step = 1;
-    else if (!strcmp(name, "media"))
-        step = 2;
-    else if (!strcmp(name, "progress"))
-        step = 3;
-    else if (!strcmp(name, "help"))
-        step = app.steps.active >= 0 ? app.steps.active : 0;
-
-    uf_step_rail_set(&app.steps, step);
-    gtk_stack_set_visible_child_name(GTK_STACK(app.stack), name);
-    page = gtk_stack_get_visible_child(GTK_STACK(app.stack));
-    if (page)
-        uf_reveal(page);
-}
-
-static void open_releases_url(const char *url)
-{
-    char cmd[640];
-    const char *u = (url && url[0]) ? url : USBFORGE_RELEASES_URL;
-    GError *err = NULL;
-
-    if (gtk_show_uri_on_window(GTK_WINDOW(app.window), u, GDK_CURRENT_TIME, &err))
-        return;
-    if (err)
-        g_error_free(err);
-    snprintf(cmd, sizeof(cmd), "xdg-open '%s' >/dev/null 2>&1 &", u);
-    if (system(cmd) != 0)
-        append_log("Could not open browser. Visit https://github.com/Kkkppmm/UBS/releases");
-}
-
-static void on_check_updates(GtkButton *btn, gpointer user_data)
+static void do_check_updates(void)
 {
     UfUpdateInfo info;
-    GtkWidget *dialog;
-    gint response;
-    (void)btn;
-    (void)user_data;
+    char *esc;
+    char *json;
 
-    append_log("Checking for updates...");
-    while (gtk_events_pending())
-        gtk_main_iteration();
     uf_check_for_updates(&info);
-    append_log(info.message);
-
+    esc = json_escape(info.message);
     if (!info.ok) {
-        dialog = gtk_message_dialog_new(
-            GTK_WINDOW(app.window), GTK_DIALOG_MODAL,
-            GTK_MESSAGE_WARNING, GTK_BUTTONS_YES_NO, "%s", info.message);
-        response = gtk_dialog_run(GTK_DIALOG(dialog));
-        gtk_widget_destroy(dialog);
-        if (response == GTK_RESPONSE_YES)
-            open_releases_url(info.html_url);
+        json = g_strdup_printf(
+            "{\"event\":\"update_result\",\"message\":\"%s\",\"open_url\":\"%s\"}",
+            esc, USBFORGE_RELEASES_URL);
+    } else if (info.update_available) {
+        char *url = json_escape(info.html_url[0] ? info.html_url : USBFORGE_RELEASES_URL);
+        json = g_strdup_printf(
+            "{\"event\":\"update_result\",\"message\":\"%s\\n\\nOpen downloads page?\",\"open_url\":\"%s\"}",
+            esc, url);
+        g_free(url);
+    } else {
+        json = g_strdup_printf(
+            "{\"event\":\"update_result\",\"message\":\"%s\"}", esc);
+    }
+    ui_send_event(json);
+    g_free(esc);
+    g_free(json);
+}
+
+static char *json_get_string(const char *json, const char *key)
+{
+    char pattern[128];
+    const char *p, *q;
+    char *out;
+    size_t n;
+    snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+    p = strstr(json, pattern);
+    if (!p) return NULL;
+    p = strchr(p + strlen(pattern), '"');
+    if (!p) return NULL;
+    p++;
+    q = p;
+    while (*q && *q != '"') {
+        if (*q == '\\' && q[1]) q += 2;
+        else q++;
+    }
+    if (*q != '"') return NULL;
+    n = (size_t)(q - p);
+    out = g_malloc(n + 1);
+    memcpy(out, p, n);
+    out[n] = '\0';
+    return out;
+}
+
+static void handle_message(const char *payload)
+{
+    char *action;
+
+    if (!payload || !*payload)
         return;
-    }
-
-    dialog = gtk_message_dialog_new(
-        GTK_WINDOW(app.window), GTK_DIALOG_MODAL,
-        info.update_available ? GTK_MESSAGE_QUESTION : GTK_MESSAGE_INFO,
-        info.update_available ? GTK_BUTTONS_YES_NO : GTK_BUTTONS_OK,
-        "%s", info.message);
-    if (info.update_available)
-        gtk_message_dialog_format_secondary_text(
-            GTK_MESSAGE_DIALOG(dialog),
-            "Install the update now with usbforge-update?");
-
-    response = gtk_dialog_run(GTK_DIALOG(dialog));
-    gtk_widget_destroy(dialog);
-
-    if (response == GTK_RESPONSE_YES && info.update_available) {
-        if (uf_file_exists("/usr/bin/usbforge-update"))
-            start_job("x-terminal-emulator -e usbforge-update 2>/dev/null || "
-                      "gnome-terminal -- usbforge-update 2>/dev/null || usbforge-update",
-                      "Updater finished.", "Could not launch updater.");
-        else if (uf_file_exists("scripts/usbforge-update.sh"))
-            start_job("bash scripts/usbforge-update.sh", "Updater finished.", "Update failed.");
-        else
-            open_releases_url(info.html_url);
-    }
-}
-
-static void sync_mode_ui(void)
-{
-    gboolean write = (app.mode == MODE_WRITE_USB);
-
-    uf_option_set_active(app.tile_usb, write);
-    uf_option_set_active(app.tile_iso, !write);
-
-    if (app.usb_row)
-        gtk_widget_set_sensitive(app.usb_row, write);
-    if (app.usb_label)
-        gtk_widget_set_sensitive(app.usb_label, write);
-    if (app.iso_label) {
-        gtk_label_set_text(GTK_LABEL(app.iso_label),
-            write ? "ISO file" : "Save ISO as");
-    }
-    if (app.media_hint) {
-        gtk_label_set_text(GTK_LABEL(app.media_hint),
-            write
-                ? "Select the ISO image and the USB flash drive you want to use."
-                : "Choose where to save the new bootable ISO image.");
-    }
-    if (app.page_title) {
-        gtk_label_set_text(GTK_LABEL(app.page_title),
-            write ? "Choose which media to use" : "Select an ISO file");
-    }
-    if (app.create_btn)
-        gtk_button_set_label(GTK_BUTTON(app.create_btn), "Create");
-}
-
-static void on_mode_toggled(GtkToggleButton *btn, gpointer user_data)
-{
-    (void)user_data;
-    if (!gtk_toggle_button_get_active(btn))
+    action = json_get_string(payload, "action");
+    if (!action)
         return;
-    if (btn == GTK_TOGGLE_BUTTON(app.radio_iso))
-        app.mode = MODE_CREATE_ISO;
-    else
-        app.mode = MODE_WRITE_USB;
-    sync_mode_ui();
-}
 
-static gboolean on_tile_press(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
-{
-    GtkWidget *radio = user_data;
-    (void)widget;
-    (void)event;
-    if (radio)
-        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(radio), TRUE);
-    return TRUE;
-}
-
-static void on_accept(GtkButton *btn, gpointer user_data)
-{
-    (void)btn;
-    (void)user_data;
-    on_show_page("mode");
-}
-
-static void on_back_to_welcome(GtkButton *btn, gpointer user_data)
-{
-    (void)btn;
-    (void)user_data;
-    on_show_page("welcome");
-}
-
-static void on_back_to_mode(GtkButton *btn, gpointer user_data)
-{
-    (void)btn;
-    (void)user_data;
-    on_show_page("mode");
-}
-
-static void on_next_media(GtkButton *btn, gpointer user_data)
-{
-    (void)btn;
-    (void)user_data;
-    sync_mode_ui();
-    refresh_usb_list();
-    on_show_page("media");
-}
-
-static void on_create(GtkButton *btn, gpointer user_data)
-{
-    const char *iso;
-    char *usb = NULL;
-    (void)btn;
-    (void)user_data;
-
-    iso = gtk_entry_get_text(GTK_ENTRY(app.iso_entry));
-    if (!iso || !*iso) {
-        append_log(app.mode == MODE_CREATE_ISO
-                       ? "Choose where to save the ISO first."
-                       : "Choose an ISO file first.");
-        return;
-    }
-    if (app.mode == MODE_WRITE_USB) {
-        if (!uf_file_exists(iso)) {
-            append_log("Choose a valid ISO file before writing.");
-            return;
+    if (!strcmp(action, "ready")) {
+        char *json = g_strdup_printf(
+            "{\"event\":\"ready\",\"version\":\"%s\"}", USBFORGE_VERSION);
+        ui_send_event(json);
+        g_free(json);
+        send_usb_list();
+    } else if (!strcmp(action, "scan_usb")) {
+        send_usb_list();
+    } else if (!strcmp(action, "browse_iso")) {
+        char *mode = json_get_string(payload, "mode");
+        do_browse(mode ? mode : "open");
+        g_free(mode);
+    } else if (!strcmp(action, "verify_iso")) {
+        char *iso = json_get_string(payload, "iso");
+        do_verify(iso);
+        g_free(iso);
+    } else if (!strcmp(action, "create")) {
+        char *mode = json_get_string(payload, "mode");
+        char *iso = json_get_string(payload, "iso");
+        char *usb = json_get_string(payload, "usb");
+        do_create(mode, iso, usb);
+        g_free(mode); g_free(iso); g_free(usb);
+    } else if (!strcmp(action, "check_updates")) {
+        do_check_updates();
+    } else if (!strcmp(action, "load_help")) {
+        char *topic = json_get_string(payload, "topic");
+        send_help(topic);
+        g_free(topic);
+    } else if (!strcmp(action, "open_url")) {
+        char *url = json_get_string(payload, "url");
+        if (url && *url) {
+            char cmd[640];
+            snprintf(cmd, sizeof(cmd), "xdg-open '%s' >/dev/null 2>&1 &", url);
+            if (system(cmd) != 0)
+                ui_log("Could not open browser.");
         }
-        usb = selected_usb_path();
-        if (!usb) {
-            append_log("Select a USB flash drive first.");
-            return;
-        }
-        g_free(usb);
+        g_free(url);
+    } else if (!strcmp(action, "quit")) {
+        if (app.window)
+            gtk_window_close(GTK_WINDOW(app.window));
     }
-
-    if (app.result_banner)
-        gtk_widget_hide(app.result_banner);
-    if (app.progress)
-        gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(app.progress), 0.0);
-    set_progress_classes("uf-busy");
-    if (app.progress_title) {
-        gtk_label_set_text(GTK_LABEL(app.progress_title),
-            app.mode == MODE_WRITE_USB
-                ? "Creating your USB flash drive"
-                : "Creating your ISO file");
-    }
-    if (app.progress_sub) {
-        gtk_label_set_text(GTK_LABEL(app.progress_sub),
-            "This might take a while — keep this window open until the process finishes.");
-    }
-    if (app.finish_btn) {
-        gtk_button_set_label(GTK_BUTTON(app.finish_btn), "Finish");
-        gtk_widget_set_sensitive(app.finish_btn, FALSE);
-    }
-    on_show_page("progress");
-    if (app.mode == MODE_CREATE_ISO)
-        on_build_iso();
-    else
-        on_write_usb();
+    g_free(action);
 }
 
-static void on_cancel_quit(GtkButton *btn, gpointer user_data)
+static void on_script_message(WebKitUserContentManager *mgr,
+                              WebKitJavascriptResult *result,
+                              gpointer user_data)
 {
-    (void)btn;
+    JSCValue *value;
+    gchar *payload = NULL;
+    (void)mgr;
     (void)user_data;
-    if (app.window)
-        gtk_window_close(GTK_WINDOW(app.window));
+
+    value = webkit_javascript_result_get_js_value(result);
+    if (jsc_value_is_string(value))
+        payload = jsc_value_to_string(value);
+    else {
+        /* Some WebKit builds deliver objects; stringify via JSON */
+        JSCValue *s = jsc_value_object_invoke_method(value, "toString", G_TYPE_NONE);
+        if (s && jsc_value_is_string(s))
+            payload = jsc_value_to_string(s);
+    }
+    if (payload) {
+        handle_message(payload);
+        g_free(payload);
+    }
 }
 
-static void on_open_help(GtkButton *btn, gpointer user_data)
+static gboolean on_delete(GtkWidget *w, GdkEvent *e, gpointer data)
 {
-    (void)btn;
-    (void)user_data;
-    load_help_topic("getting-started.md");
-    on_show_page("help");
-}
-
-static void on_help_topic(GtkButton *btn, gpointer user_data)
-{
-    (void)btn;
-    load_help_topic((const char *)user_data);
-}
-
-static GtkWidget *footer_bar(GtkWidget *left, GtkWidget *right1, GtkWidget *right2)
-{
-    GtkWidget *bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_style_context_add_class(gtk_widget_get_style_context(bar), "uf-footer");
-    if (left)
-        gtk_box_pack_start(GTK_BOX(bar), left, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(bar), gtk_label_new(NULL), TRUE, TRUE, 0);
-    if (right1)
-        gtk_box_pack_start(GTK_BOX(bar), right1, FALSE, FALSE, 0);
-    if (right2)
-        gtk_box_pack_start(GTK_BOX(bar), right2, FALSE, FALSE, 0);
-    return bar;
-}
-
-static GtkWidget *page_shell(GtkWidget *body, GtkWidget *footer)
-{
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_style_context_add_class(gtk_widget_get_style_context(content), "uf-content");
-    gtk_box_pack_start(GTK_BOX(content), body, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(box), content, TRUE, TRUE, 0);
-    if (footer)
-        gtk_box_pack_start(GTK_BOX(box), footer, FALSE, FALSE, 0);
-    return box;
-}
-
-static GtkWidget *build_welcome(void)
-{
-    GtkWidget *body, *title, *sub, *license_box, *scrolled, *view;
-    GtkWidget *accept, *cancel, *help, *updates, *footer, *left;
-    GtkTextBuffer *buf;
-    const char *notices =
-        "USBForge Media Creation Tool\n"
-        "Copyright (c) USBForge contributors\n\n"
-        "Applicable notices\n"
-        "------------------\n"
-        "This tool creates bootable installation media (ISO or USB flash drive),\n"
-        "similar to the Windows Media Creation Tool.\n\n"
-        "• Writing to a USB flash drive will erase all data on that drive.\n"
-        "• Always double-check the selected drive before continuing.\n"
-        "• Windows ISOs are prepared for FAT32 (large install.wim may be split).\n"
-        "• After booting USBForge media you get a USB Lab for testing and docs;\n"
-        "  install is optional.\n\n"
-        "By selecting Accept you acknowledge these notices and agree to use this\n"
-        "software at your own risk. See LICENSE and docs/safety.md for details.\n\n"
-        "Privacy: Check for updates contacts GitHub Releases over the network.\n";
-
-    body = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-
-    title = uf_title_label("Applicable notices and license terms");
-    sub = uf_subtitle_label(
-        "Review the following notices. Select Accept to continue.");
-
-    license_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_style_context_add_class(gtk_widget_get_style_context(license_box), "uf-license");
-    scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_widget_set_vexpand(scrolled, TRUE);
-    gtk_widget_set_size_request(scrolled, -1, 240);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
-                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-    view = gtk_text_view_new();
-    buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
-    gtk_text_buffer_set_text(buf, notices, -1);
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(view), FALSE);
-    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(view), FALSE);
-    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(view), GTK_WRAP_WORD_CHAR);
-    gtk_text_view_set_left_margin(GTK_TEXT_VIEW(view), 12);
-    gtk_text_view_set_right_margin(GTK_TEXT_VIEW(view), 12);
-    gtk_text_view_set_top_margin(GTK_TEXT_VIEW(view), 10);
-    gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(view), 10);
-    gtk_container_add(GTK_CONTAINER(scrolled), view);
-    gtk_box_pack_start(GTK_BOX(license_box), scrolled, TRUE, TRUE, 0);
-
-    gtk_box_pack_start(GTK_BOX(body), title, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), sub, FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(body), license_box, TRUE, TRUE, 8);
-
-    accept = uf_primary_button("Accept");
-    cancel = uf_secondary_button("Cancel");
-    help = uf_link_button("Help");
-    updates = uf_link_button("Check for updates");
-    g_signal_connect(accept, "clicked", G_CALLBACK(on_accept), NULL);
-    g_signal_connect(cancel, "clicked", G_CALLBACK(on_cancel_quit), NULL);
-    g_signal_connect(help, "clicked", G_CALLBACK(on_open_help), NULL);
-    g_signal_connect(updates, "clicked", G_CALLBACK(on_check_updates), NULL);
-
-    left = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
-    gtk_box_pack_start(GTK_BOX(left), cancel, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(left), help, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(left), updates, FALSE, FALSE, 0);
-
-    footer = footer_bar(left, NULL, accept);
-    return page_shell(body, footer);
-}
-
-static GtkWidget *build_mode(void)
-{
-    GtkWidget *body, *title, *sub, *back, *next, *footer;
-
-    body = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-
-    title = uf_title_label("What do you want to do?");
-    sub = uf_subtitle_label(
-        "Select an option below, then choose Next to continue.");
-
-    app.tile_usb = uf_option_tile(
-        NULL,
-        "Create installation media (USB flash drive)",
-        "Write a Windows or Linux ISO you already have to a USB flash drive. "
-        "Recommended for most people.",
-        &app.radio_usb);
-    app.tile_iso = uf_option_tile(
-        GTK_RADIO_BUTTON(app.radio_usb),
-        "Create an ISO file",
-        "Build a new USBForge bootable ISO image to save on this PC "
-        "(advanced — for making USBForge Live media).",
-        &app.radio_iso);
-
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(app.radio_usb), TRUE);
-    app.mode = MODE_WRITE_USB;
-    g_signal_connect(app.radio_iso, "toggled", G_CALLBACK(on_mode_toggled), NULL);
-    g_signal_connect(app.radio_usb, "toggled", G_CALLBACK(on_mode_toggled), NULL);
-    g_signal_connect(app.tile_usb, "button-press-event", G_CALLBACK(on_tile_press), app.radio_usb);
-    g_signal_connect(app.tile_iso, "button-press-event", G_CALLBACK(on_tile_press), app.radio_iso);
-
-    back = uf_secondary_button("Back");
-    next = uf_primary_button("Next");
-    g_signal_connect(back, "clicked", G_CALLBACK(on_back_to_welcome), NULL);
-    g_signal_connect(next, "clicked", G_CALLBACK(on_next_media), NULL);
-
-    gtk_box_pack_start(GTK_BOX(body), title, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), sub, FALSE, FALSE, 6);
-    gtk_box_pack_start(GTK_BOX(body), app.tile_usb, FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(body), app.tile_iso, FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(body), gtk_label_new(NULL), TRUE, TRUE, 0);
-
-    footer = footer_bar(NULL, back, next);
-    return page_shell(body, footer);
-}
-
-static GtkWidget *build_media(void)
-{
-    GtkWidget *body, *browse, *refresh, *iso_row, *back, *create, *verify, *footer;
-    GtkWidget *lbl;
-    GtkCellRenderer *renderer;
-
-    body = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-
-    app.page_title = uf_title_label("Choose which media to use");
-    app.media_hint = uf_subtitle_label(
-        "Select the ISO image and the USB flash drive you want to use.");
-
-    gtk_box_pack_start(GTK_BOX(body), app.page_title, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), app.media_hint, FALSE, FALSE, 6);
-
-    app.iso_label = gtk_label_new("ISO file");
-    gtk_style_context_add_class(gtk_widget_get_style_context(app.iso_label), "uf-field-label");
-    gtk_widget_set_halign(app.iso_label, GTK_ALIGN_START);
-    gtk_box_pack_start(GTK_BOX(body), app.iso_label, FALSE, FALSE, 8);
-
-    iso_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    app.iso_entry = gtk_entry_new();
-    gtk_entry_set_placeholder_text(GTK_ENTRY(app.iso_entry),
-                                   "Select an ISO file…");
-    gtk_entry_set_text(GTK_ENTRY(app.iso_entry), "");
-    gtk_widget_set_hexpand(app.iso_entry, TRUE);
-    browse = uf_secondary_button("Browse");
-    g_signal_connect(browse, "clicked", G_CALLBACK(on_browse_iso), NULL);
-    gtk_box_pack_start(GTK_BOX(iso_row), app.iso_entry, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(iso_row), browse, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), iso_row, FALSE, FALSE, 0);
-
-    app.usb_label = gtk_label_new("Removable drive that will be used");
-    gtk_style_context_add_class(gtk_widget_get_style_context(app.usb_label), "uf-field-label");
-    gtk_widget_set_halign(app.usb_label, GTK_ALIGN_START);
-    gtk_box_pack_start(GTK_BOX(body), app.usb_label, FALSE, FALSE, 14);
-
-    app.usb_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    app.usb_store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
-    app.usb_combo = gtk_combo_box_new_with_model(GTK_TREE_MODEL(app.usb_store));
-    renderer = gtk_cell_renderer_text_new();
-    gtk_cell_layout_pack_start(GTK_CELL_LAYOUT(app.usb_combo), renderer, TRUE);
-    gtk_cell_layout_add_attribute(GTK_CELL_LAYOUT(app.usb_combo), renderer, "text", 0);
-    gtk_widget_set_hexpand(app.usb_combo, TRUE);
-    refresh = uf_secondary_button("Refresh");
-    g_signal_connect(refresh, "clicked", G_CALLBACK(on_refresh_clicked), NULL);
-    gtk_box_pack_start(GTK_BOX(app.usb_row), app.usb_combo, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(app.usb_row), refresh, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), app.usb_row, FALSE, FALSE, 0);
-
-    verify = uf_link_button("Verify ISO file");
-    g_signal_connect(verify, "clicked", G_CALLBACK(on_verify_clicked), NULL);
-    gtk_widget_set_halign(verify, GTK_ALIGN_START);
-    gtk_box_pack_start(GTK_BOX(body), verify, FALSE, FALSE, 12);
-
-    lbl = gtk_label_new(
-        "Warning: Everything on the selected USB flash drive will be deleted.");
-    gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "uf-warn");
-    gtk_label_set_xalign(GTK_LABEL(lbl), 0);
-    gtk_label_set_line_wrap(GTK_LABEL(lbl), TRUE);
-    gtk_box_pack_start(GTK_BOX(body), lbl, FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(body), gtk_label_new(NULL), TRUE, TRUE, 0);
-
-    back = uf_secondary_button("Back");
-    create = uf_primary_button("Create");
-    app.create_btn = create;
-    g_signal_connect(back, "clicked", G_CALLBACK(on_back_to_mode), NULL);
-    g_signal_connect(create, "clicked", G_CALLBACK(on_create), NULL);
-
-    footer = footer_bar(NULL, back, create);
-    return page_shell(body, footer);
-}
-
-static GtkWidget *build_progress(void)
-{
-    GtkWidget *body, *scrolled, *frame, *back, *again, *footer;
-    GtkWidget *warn;
-
-    body = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-
-    app.progress_title = uf_title_label("Creating your media");
-    app.progress_sub = uf_subtitle_label(
-        "This might take a while — keep this window open until the process finishes.");
-
-    app.activity_label = gtk_label_new("Working…");
-    gtk_style_context_add_class(gtk_widget_get_style_context(app.activity_label), "uf-spinner-label");
-    gtk_widget_set_halign(app.activity_label, GTK_ALIGN_START);
-    gtk_widget_set_no_show_all(app.activity_label, TRUE);
-    gtk_widget_hide(app.activity_label);
-
-    app.progress = gtk_progress_bar_new();
-    gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(app.progress), FALSE);
-    gtk_widget_set_margin_top(app.progress, 12);
-    gtk_widget_set_margin_bottom(app.progress, 8);
-
-    app.status = gtk_label_new("Getting things ready…");
-    gtk_style_context_add_class(gtk_widget_get_style_context(app.status), "uf-progress-hero");
-    gtk_widget_set_halign(app.status, GTK_ALIGN_START);
-
-    app.result_banner = gtk_label_new("");
-    gtk_label_set_xalign(GTK_LABEL(app.result_banner), 0);
-    gtk_label_set_line_wrap(GTK_LABEL(app.result_banner), TRUE);
-    gtk_widget_set_no_show_all(app.result_banner, TRUE);
-    gtk_widget_hide(app.result_banner);
-
-    warn = gtk_label_new(
-        "Do not remove the USB flash drive or close this window while Creating is in progress.");
-    gtk_style_context_add_class(gtk_widget_get_style_context(warn), "uf-warn");
-    gtk_label_set_xalign(GTK_LABEL(warn), 0);
-    gtk_label_set_line_wrap(GTK_LABEL(warn), TRUE);
-
-    frame = gtk_frame_new("Details");
-    scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_widget_set_vexpand(scrolled, TRUE);
-    gtk_widget_set_size_request(scrolled, -1, 160);
-    app.log_view = gtk_text_view_new();
-    app.log_buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app.log_view));
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(app.log_view), FALSE);
-    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(app.log_view), FALSE);
-    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(app.log_view), GTK_WRAP_WORD_CHAR);
-    gtk_text_view_set_left_margin(GTK_TEXT_VIEW(app.log_view), 8);
-    gtk_text_view_set_top_margin(GTK_TEXT_VIEW(app.log_view), 6);
-    gtk_container_add(GTK_CONTAINER(scrolled), app.log_view);
-    gtk_container_add(GTK_CONTAINER(frame), scrolled);
-
-    gtk_box_pack_start(GTK_BOX(body), app.progress_title, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), app.progress_sub, FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(body), app.activity_label, FALSE, FALSE, 2);
-    gtk_box_pack_start(GTK_BOX(body), app.progress, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), app.status, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), app.result_banner, FALSE, FALSE, 8);
-    gtk_box_pack_start(GTK_BOX(body), warn, FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(body), frame, TRUE, TRUE, 8);
-
-    back = uf_secondary_button("Back");
-    again = uf_primary_button("Finish");
-    app.progress_back_btn = back;
-    app.finish_btn = again;
-    g_signal_connect(back, "clicked", G_CALLBACK(on_back_to_mode), NULL);
-    g_signal_connect(again, "clicked", G_CALLBACK(on_back_to_welcome), NULL);
-    footer = footer_bar(NULL, back, again);
-    return page_shell(body, footer);
-}
-
-static GtkWidget *build_help(void)
-{
-    GtkWidget *body, *title, *topics, *scrolled, *back, *footer;
-    GtkWidget *b1, *b2, *b3, *b4;
-
-    body = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    title = uf_title_label("Help");
-
-    topics = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    b1 = uf_secondary_button("Getting started");
-    b2 = uf_secondary_button("Create ISO");
-    b3 = uf_secondary_button("Write USB");
-    b4 = uf_secondary_button("Safety");
-    g_signal_connect(b1, "clicked", G_CALLBACK(on_help_topic), (gpointer)"getting-started.md");
-    g_signal_connect(b2, "clicked", G_CALLBACK(on_help_topic), (gpointer)"create-iso.md");
-    g_signal_connect(b3, "clicked", G_CALLBACK(on_help_topic), (gpointer)"write-usb.md");
-    g_signal_connect(b4, "clicked", G_CALLBACK(on_help_topic), (gpointer)"safety.md");
-    gtk_box_pack_start(GTK_BOX(topics), b1, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(topics), b2, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(topics), b3, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(topics), b4, FALSE, FALSE, 0);
-
-    scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_widget_set_vexpand(scrolled, TRUE);
-    app.help_view = gtk_text_view_new();
-    app.help_buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app.help_view));
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(app.help_view), FALSE);
-    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(app.help_view), GTK_WRAP_WORD_CHAR);
-    gtk_text_view_set_left_margin(GTK_TEXT_VIEW(app.help_view), 10);
-    gtk_text_view_set_top_margin(GTK_TEXT_VIEW(app.help_view), 8);
-    gtk_container_add(GTK_CONTAINER(scrolled), app.help_view);
-
-    gtk_box_pack_start(GTK_BOX(body), title, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(body), topics, FALSE, FALSE, 4);
-    gtk_box_pack_start(GTK_BOX(body), scrolled, TRUE, TRUE, 0);
-
-    back = uf_primary_button("Back");
-    g_signal_connect(back, "clicked", G_CALLBACK(on_back_to_welcome), NULL);
-    footer = footer_bar(NULL, NULL, back);
-    load_help_topic("getting-started.md");
-    return page_shell(body, footer);
+    (void)w; (void)e; (void)data;
+    if (app.busy) {
+        GtkWidget *d = gtk_message_dialog_new(
+            GTK_WINDOW(app.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_YES_NO,
+            "A job is still running.\n\nClose anyway? The write may continue in the background.");
+        gint res = gtk_dialog_run(GTK_DIALOG(d));
+        gtk_widget_destroy(d);
+        if (res != GTK_RESPONSE_YES)
+            return TRUE;
+    }
+    app.alive = 0;
+    app.job_gen++;
+    return FALSE;
 }
 
 static void activate(GtkApplication *gtk_app, gpointer user_data)
 {
-    GtkWidget *outer, *header, *steps;
-    const char *step_labels[] = { "Notices", "Options", "Media", "Finish" };
+    WebKitUserContentManager *ucm;
+    WebKitSettings *settings;
+    char index_uri[USBFORGE_MAX_PATH * 2];
+    char index_path[USBFORGE_MAX_PATH];
     (void)user_data;
 
     memset(&app, 0, sizeof(app));
-    app.mode = MODE_WRITE_USB;
+    app.alive = 1;
+
+    if (find_ui_dir(app.ui_dir, sizeof(app.ui_dir)) != 0) {
+        g_printerr("USBForge: UI not found (ui/builder/index.html).\n");
+        return;
+    }
+    snprintf(index_path, sizeof(index_path), "%s/index.html", app.ui_dir);
 
     app.window = gtk_application_window_new(gtk_app);
     gtk_window_set_title(GTK_WINDOW(app.window), "USBForge Media Creation Tool");
-    gtk_window_set_default_size(GTK_WINDOW(app.window), 680, 560);
-    gtk_window_set_resizable(GTK_WINDOW(app.window), TRUE);
+    gtk_window_set_default_size(GTK_WINDOW(app.window), 720, 580);
     gtk_window_set_position(GTK_WINDOW(app.window), GTK_WIN_POS_CENTER);
+    g_signal_connect(app.window, "delete-event", G_CALLBACK(on_delete), NULL);
 
-    uf_apply_fluent_theme();
+    ucm = webkit_user_content_manager_new();
+    webkit_user_content_manager_register_script_message_handler(ucm, "usbforge");
+    g_signal_connect(ucm, "script-message-received::usbforge",
+                     G_CALLBACK(on_script_message), NULL);
 
-    outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_style_context_add_class(gtk_widget_get_style_context(outer), "uf-root");
-    header = uf_header_bar_versioned("USBForge Setup", "v" USBFORGE_VERSION);
-    steps = uf_step_rail_new(&app.steps, step_labels, 4);
+    app.web = WEBKIT_WEB_VIEW(webkit_web_view_new_with_user_content_manager(ucm));
+    settings = webkit_web_view_get_settings(app.web);
+    webkit_settings_set_enable_developer_extras(settings, FALSE);
+    webkit_settings_set_javascript_can_access_clipboard(settings, FALSE);
 
-    app.stack = gtk_stack_new();
-    gtk_stack_set_transition_type(GTK_STACK(app.stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
-    gtk_stack_set_transition_duration(GTK_STACK(app.stack), 220);
-    gtk_stack_add_named(GTK_STACK(app.stack), build_welcome(), "welcome");
-    gtk_stack_add_named(GTK_STACK(app.stack), build_mode(), "mode");
-    gtk_stack_add_named(GTK_STACK(app.stack), build_media(), "media");
-    gtk_stack_add_named(GTK_STACK(app.stack), build_progress(), "progress");
-    gtk_stack_add_named(GTK_STACK(app.stack), build_help(), "help");
+    {
+        char *abs = realpath(index_path, NULL);
+        if (abs) {
+            snprintf(index_uri, sizeof(index_uri), "file://%s", abs);
+            free(abs);
+        } else {
+            snprintf(index_uri, sizeof(index_uri), "file://%s", index_path);
+        }
+    }
+    webkit_web_view_load_uri(app.web, index_uri);
 
-    gtk_box_pack_start(GTK_BOX(outer), header, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(outer), steps, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(outer), app.stack, TRUE, TRUE, 0);
-    gtk_container_add(GTK_CONTAINER(app.window), outer);
-
-    refresh_usb_list();
-    append_log("USBForge Media Creation Tool ready.");
-    sync_mode_ui();
-    uf_step_rail_set(&app.steps, 0);
+    gtk_container_add(GTK_CONTAINER(app.window), GTK_WIDGET(app.web));
     gtk_widget_show_all(app.window);
-    if (app.result_banner)
-        gtk_widget_hide(app.result_banner);
-    if (app.activity_label)
-        gtk_widget_hide(app.activity_label);
 }
 
 int main(int argc, char **argv)
@@ -1110,7 +616,18 @@ int main(int argc, char **argv)
     GtkApplication *gtk_app;
     int status;
 
-    gtk_app = gtk_application_new("org.usbforge.builder", G_APPLICATION_DEFAULT_FLAGS);
+    if (argc > 1 && !strcmp(argv[1], "--smoke")) {
+        printf("USBForge Builder %s smoke test (webkit ui)\n", USBFORGE_VERSION);
+        return 0;
+    }
+
+    gtk_app = gtk_application_new("org.usbforge.builder",
+#if GLIB_CHECK_VERSION(2,74,0)
+                                  G_APPLICATION_DEFAULT_FLAGS
+#else
+                                  G_APPLICATION_FLAGS_NONE
+#endif
+    );
     g_signal_connect(gtk_app, "activate", G_CALLBACK(activate), NULL);
     status = g_application_run(G_APPLICATION(gtk_app), argc, argv);
     g_object_unref(gtk_app);

@@ -303,7 +303,7 @@ int uf_scan_usb_devices(UsbDeviceList *list)
         if (read_sysfs_str(path, buf, sizeof(buf)) == 0 && buf[0]) {
             char model[256];
             snprintf(model, sizeof(model), "%s %s", buf, d->model);
-            snprintf(d->model, sizeof(d->model), "%s", model);
+            snprintf(d->model, sizeof(d->model), "%.120s", model);
         }
 
         snprintf(path, sizeof(path), "/sys/block/%s/size", ent->d_name);
@@ -567,6 +567,10 @@ const char *uf_find_script(const char *name)
         NULL
     };
     int i;
+#ifndef _WIN32
+    char exe[USBFORGE_MAX_PATH];
+    ssize_t n;
+#endif
 
     if (!name || !*name)
         return NULL;
@@ -576,6 +580,24 @@ const char *uf_find_script(const char *name)
         if (uf_file_exists(path))
             return path;
     }
+
+#ifndef _WIN32
+    n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+    if (n > 0) {
+        char *slash;
+        exe[n] = '\0';
+        slash = strrchr(exe, '/');
+        if (slash) {
+            *slash = '\0';
+            snprintf(path, sizeof(path), "%s/../share/usbforge/scripts/%s", exe, name);
+            if (uf_file_exists(path))
+                return path;
+            snprintf(path, sizeof(path), "%s/../../scripts/%s", exe, name);
+            if (uf_file_exists(path))
+                return path;
+        }
+    }
+#endif
     return NULL;
 }
 

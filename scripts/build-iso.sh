@@ -21,8 +21,9 @@ mkdir -p "$STAGE/usbforge/scripts"
 cp -a "$ROOT/build/usbforge-builder" "$STAGE/usbforge/bin/"
 cp -a "$ROOT/build/usbforge-live" "$STAGE/usbforge/bin/"
 cp -a "$ROOT/docs/." "$STAGE/usbforge/docs/"
-cp -a "$ROOT/scripts/build-iso.sh" "$STAGE/usbforge/scripts/" 2>/dev/null || true
-cp -a "$ROOT/scripts/live-autostart.sh" "$STAGE/usbforge/scripts/" 2>/dev/null || true
+cp -a "$ROOT/scripts/"*.sh "$STAGE/usbforge/scripts/" 2>/dev/null || true
+mkdir -p "$STAGE/usbforge/ui"
+cp -a "$ROOT/ui/." "$STAGE/usbforge/ui/" 2>/dev/null || true
 
 # README on ISO root
 cat > "$STAGE/README.TXT" <<'EOF'

@@ -421,14 +421,16 @@ static void on_check_updates(GtkButton *btn, gpointer user_data)
     gtk_widget_destroy(dialog);
 
     if (response == GTK_RESPONSE_YES && info.update_available) {
-        if (uf_file_exists("/usr/bin/usbforge-update"))
-            g_spawn_command_line_async(
-                "x-terminal-emulator -e usbforge-update || "
-                "gnome-terminal -- usbforge-update || usbforge-update", NULL);
-        else if (uf_file_exists("scripts/usbforge-update.sh"))
-            g_spawn_command_line_async("bash scripts/usbforge-update.sh", NULL);
-        else
-            open_releases_url(info.html_url);
+        g_spawn_command_line_async(
+            "bash -lc '"
+            "if command -v usbforge-update >/dev/null; then "
+            "  (x-terminal-emulator -e usbforge-update || gnome-terminal -- usbforge-update || usbforge-update); "
+            "elif test -f scripts/usbforge-update.sh; then "
+            "  bash scripts/usbforge-update.sh; "
+            "else "
+            "  xdg-open " USBFORGE_RELEASES_URL "; "
+            "fi'",
+            NULL);
     }
 }
 
@@ -439,7 +441,6 @@ static void on_install(GtkButton *btn, gpointer user_data)
     gint res;
     GString *out;
     char dest_dir[USBFORGE_MAX_PATH];
-    char cmd[8192];
     int rc;
     (void)btn;
     (void)user_data;
@@ -468,25 +469,43 @@ static void on_install(GtkButton *btn, gpointer user_data)
     }
 
     /* Mountable install: copy payload to mount point if possible */
-    snprintf(dest_dir, sizeof(dest_dir), "/mnt/usbforge-install");
-    uf_ensure_dir(dest_dir);
-    snprintf(cmd, sizeof(cmd),
-             "mount '%s1' '%s' 2>/dev/null || mount '%s' '%s' 2>/dev/null; "
-             "mkdir -p '%s/usbforge' && "
-             "(cp -a /usbforge/. '%s/usbforge/' 2>/dev/null || "
-             " cp -a iso/usbforge/. '%s/usbforge/' 2>/dev/null || "
-             " (mkdir -p '%s/usbforge/bin' '%s/usbforge/docs' && "
-             "  cp -a docs/. '%s/usbforge/docs/' && "
-             "  cp -a build/usbforge-live '%s/usbforge/bin/')); "
-             "sync",
-             target, dest_dir, target, dest_dir,
-             dest_dir, dest_dir, dest_dir, dest_dir, dest_dir, dest_dir, dest_dir);
+    {
+        char part[USBFORGE_MAX_PATH];
+        GString *scmd;
+        snprintf(dest_dir, sizeof(dest_dir), "/mnt/usbforge-install");
+        uf_ensure_dir(dest_dir);
+        /* nvme0n1 → nvme0n1p1 ; sdb → sdb1 */
+        if (g_str_has_prefix(target, "/dev/nvme") || g_str_has_prefix(target, "/dev/mmcblk") ||
+            g_str_has_prefix(target, "/dev/loop"))
+            snprintf(part, sizeof(part), "%sp1", target);
+        else
+            snprintf(part, sizeof(part), "%s1", target);
 
-    set_status("Installing payload...");
-    while (gtk_events_pending())
-        gtk_main_iteration();
+        scmd = g_string_new(NULL);
+        g_string_append_printf(scmd,
+            "pkexec bash -c '"
+            "set -e; "
+            "mkdir -p \"%s\"; "
+            "(mount \"%s\" \"%s\" || mount \"%s\" \"%s\"); "
+            "mkdir -p \"%s/usbforge\"; "
+            "(cp -a /usbforge/. \"%s/usbforge/\" 2>/dev/null || "
+            " cp -a iso/usbforge/. \"%s/usbforge/\" 2>/dev/null || "
+            " (mkdir -p \"%s/usbforge/bin\" \"%s/usbforge/docs\" && "
+            "  cp -a docs/. \"%s/usbforge/docs/\" && "
+            "  cp -a build/usbforge-live \"%s/usbforge/bin/\")); "
+            "sync; umount \"%s\" || true'",
+            dest_dir,
+            part, dest_dir, target, dest_dir,
+            dest_dir, dest_dir, dest_dir, dest_dir, dest_dir, dest_dir, dest_dir,
+            dest_dir);
 
-    rc = system(cmd);
+        set_status("Installing payload...");
+        while (gtk_events_pending())
+            gtk_main_iteration();
+
+        rc = system(scmd->str);
+        g_string_free(scmd, TRUE);
+    }
 
     out = g_string_new("Install USBForge - Results\n");
     g_string_append(out, "==========================\n\n");
@@ -774,7 +793,13 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    gtk_app = gtk_application_new("org.usbforge.live", G_APPLICATION_DEFAULT_FLAGS);
+    gtk_app = gtk_application_new("org.usbforge.live",
+#if GLIB_CHECK_VERSION(2,74,0)
+                                  G_APPLICATION_DEFAULT_FLAGS
+#else
+                                  G_APPLICATION_FLAGS_NONE
+#endif
+    );
     g_signal_connect(gtk_app, "activate", G_CALLBACK(activate), NULL);
     status = g_application_run(G_APPLICATION(gtk_app), argc, argv);
     g_object_unref(gtk_app);

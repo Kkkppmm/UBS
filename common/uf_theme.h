@@ -16,8 +16,9 @@ static const char *UF_FLUENT_CSS =
     "  100% { background-color: #0078d4; }"
     "}"
     "@keyframes uf-pulse-dot {"
-    "  0%, 100% { opacity: 1; }"
-    "  50%      { opacity: 0.45; }"
+    "  0%   { opacity: 1; }"
+    "  50%  { opacity: 0.45; }"
+    "  100% { opacity: 1; }"
     "}"
     "window, .uf-root {"
     "  background-color: #ffffff;"
@@ -358,7 +359,11 @@ static const char *UF_FLUENT_CSS =
 static void uf_apply_fluent_theme(void)
 {
     GtkCssProvider *provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_data(provider, UF_FLUENT_CSS, -1, NULL);
+    GError *err = NULL;
+    if (!gtk_css_provider_load_from_data(provider, UF_FLUENT_CSS, -1, &err)) {
+        g_warning("USBForge theme CSS failed: %s", err ? err->message : "unknown");
+        if (err) g_error_free(err);
+    }
     gtk_style_context_add_provider_for_screen(
         gdk_screen_get_default(),
         GTK_STYLE_PROVIDER(provider),

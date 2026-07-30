@@ -25,14 +25,23 @@ cp "$ROOT/scripts/"*.sh "$STAGE/scripts/" 2>/dev/null || true
 cp "$ROOT/packaging/linux/"*.desktop "$STAGE/share/applications/"
 cp -a "$ROOT/packaging/linux/icons/hicolor/." "$STAGE/share/icons/hicolor/"
 cp "$ROOT/README.md" "$ROOT/LICENSE" "$STAGE/"
+mkdir -p "$STAGE/share/usbforge/ui"
+cp -a "$ROOT/ui/." "$STAGE/share/usbforge/ui/"
 cat > "$STAGE/install.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 PREFIX="${PREFIX:-/usr/local}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
-install -d "$PREFIX/bin" "$PREFIX/share/usbforge/docs" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor"
+install -d "$PREFIX/bin" "$PREFIX/share/usbforge/docs" "$PREFIX/share/usbforge/scripts" \
+  "$PREFIX/share/usbforge/ui" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor"
 install -m755 "$DIR/bin/"* "$PREFIX/bin/"
 install -m644 "$DIR/docs/"* "$PREFIX/share/usbforge/docs/"
+install -m755 "$DIR/scripts/"* "$PREFIX/share/usbforge/scripts/" 2>/dev/null || true
+if [[ -d "$DIR/share/usbforge/ui" ]]; then
+  cp -a "$DIR/share/usbforge/ui/." "$PREFIX/share/usbforge/ui/"
+elif [[ -d "$DIR/ui" ]]; then
+  cp -a "$DIR/ui/." "$PREFIX/share/usbforge/ui/"
+fi
 install -m644 "$DIR/share/applications/"* "$PREFIX/share/applications/" 2>/dev/null || true
 cp -a "$DIR/share/icons/hicolor/." "$PREFIX/share/icons/hicolor/" 2>/dev/null || true
 if command -v update-desktop-database >/dev/null 2>&1; then

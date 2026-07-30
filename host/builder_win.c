@@ -30,6 +30,7 @@
 #define ID_RADIO_ISO      1020
 #define ID_RADIO_USB      1021
 #define ID_CREATE         1022
+#define ID_CANCEL_BTN     1023
 
 #define COL_BG       RGB(255, 255, 255)
 #define COL_WHITE    RGB(255, 255, 255)
@@ -305,7 +306,7 @@ static HWND mk_label(HWND parent, const char *text, int x, int y, int w, int h, 
 static void create_ui(HWND hwnd)
 {
     int y;
-    HWND create_btn, cancel_btn;
+    HWND create_btn;
 
     g_br_bg = CreateSolidBrush(COL_BG);
     g_br_white = CreateSolidBrush(COL_WHITE);
@@ -397,9 +398,8 @@ static void create_ui(HWND hwnd)
 
     /* MCT-style footer actions */
     g_footer_top = 628;
-    cancel_btn = mk_btn(hwnd, "Cancel", 32, g_footer_top + 14, 88, 32, ID_BUILD_HINT);
+    mk_btn(hwnd, "Cancel", 32, g_footer_top + 14, 88, 32, ID_CANCEL_BTN);
     create_btn = mk_btn(hwnd, "Create", 542, g_footer_top + 14, 96, 32, ID_CREATE);
-    (void)cancel_btn;
     (void)create_btn;
 
     load_help_file("getting-started.md");
@@ -449,9 +449,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         case ID_BROWSE_ISO: browse_iso(); break;
         case ID_REFRESH: refresh_usb(); break;
         case ID_WRITE_USB:
-        case ID_CREATE: write_iso_to_usb(); break;
+        case ID_CREATE:
+            if (!g_mode_usb)
+                build_hint();
+            else
+                write_iso_to_usb();
+            break;
         case ID_OPEN_DOCS: open_docs_folder(); break;
         case ID_BUILD_HINT: build_hint(); break;
+        case ID_CANCEL_BTN: DestroyWindow(hwnd); break;
         case ID_CHECK_UPDATES: check_updates(); break;
         case ID_TOPIC_START: load_help_file("getting-started.md"); break;
         case ID_TOPIC_WRITE: load_help_file("write-usb.md"); break;

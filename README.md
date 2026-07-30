@@ -6,7 +6,7 @@
 
 | Tool | Role |
 |------|------|
-| `usbforge-builder` | Host GUI (Linux/GTK): build ISO, write to USB, verify, help |
+| `usbforge-builder` | Host GUI (Linux/WebKit): HTML/CSS/JS Media Creation Tool wizard |
 | `usbforge-live` | Live/boot GUI: USB probe, read-speed test, diagnostics, docs |
 | `USBForge.exe` | Windows writer + help (NSIS installer / portable zip) |
 | `scripts/build-iso.sh` | Packages a GRUB-bootable ISO |

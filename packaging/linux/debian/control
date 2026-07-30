@@ -1,9 +1,9 @@
 Package: usbforge
-Version: 1.4.0
+Version: 1.5.0
 Section: utils
 Priority: optional
 Architecture: amd64
-Depends: libgtk-3-0, xorriso
+Depends: libgtk-3-0, libwebkit2gtk-4.1-0, xorriso
 Recommends: grub-common, grub-pc-bin, mtools, pkexec, curl | wget | python3, parted, dosfstools, rsync, wimtools
 Maintainer: USBForge Contributors <usbforge@localhost>
 Description: Bootable ISO builder and Live USB Lab
