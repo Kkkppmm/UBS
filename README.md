@@ -1,6 +1,6 @@
 # USBForge
 
-**USBForge** is a C toolkit to create a bootable ISO, write it to USB, and boot into a friendly **USB Lab** - for testing, docs, diagnostics, and install - not install-only.
+**USBForge** creates bootable ISO/USB media with a **Windows Media Creation Tool–style wizard**, then boots into a USB Lab for testing and docs.
 
 ## What you get
 

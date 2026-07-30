@@ -1,9 +1,9 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=USBForge Builder
-GenericName=Bootable ISO Builder
-Comment=Create bootable ISOs and write them to USB
+Name=USBForge Media Creation
+GenericName=Bootable Media Creation
+Comment=Create bootable ISO or USB media (Windows Media Creation style)
 Exec=usbforge-builder
 TryExec=usbforge-builder
 Icon=usbforge

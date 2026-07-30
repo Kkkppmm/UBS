@@ -14,6 +14,7 @@
 #include <sys/statvfs.h>
 
 #include "usbforge.h"
+#include "uf_theme.h"
 
 typedef struct {
     GtkWidget *window;
@@ -482,83 +483,60 @@ static void on_install(GtkButton *btn, gpointer user_data)
 
 static void apply_css(void)
 {
-    GtkCssProvider *provider;
-    const char *css =
-        "window {"
-        "  background: linear-gradient(145deg, #102a1f 0%, #0d3d32 40%, #145c4c 100%);"
-        "}"
-        "label, textview, textview text {"
-        "  color: #e7f7f1;"
-        "  font-family: 'IBM Plex Sans', 'Source Sans 3', 'Segoe UI', sans-serif;"
-        "}"
-        "button {"
-        "  background-image: none;"
-        "  background-color: #1f8a6e;"
-        "  color: #f3fffb;"
-        "  border-radius: 8px;"
-        "  padding: 14px 18px;"
-        "  border: none;"
-        "  font-weight: 600;"
-        "  font-size: 14px;"
-        "}"
-        "button:hover { background-color: #27a884; }"
-        "button.danger { background-color: #b3543c; }"
-        "button.danger:hover { background-color: #c8664c; }"
-        "entry, combobox, frame, scrolledwindow, treeview {"
-        "  background-color: rgba(6, 32, 26, 0.75);"
-        "  color: #e7f7f1;"
-        "  border-radius: 6px;"
-        "}";
-
-    provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_data(provider, css, -1, NULL);
-    gtk_style_context_add_provider_for_screen(
-        gdk_screen_get_default(),
-        GTK_STYLE_PROVIDER(provider),
-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-    g_object_unref(provider);
+    uf_apply_fluent_theme();
 }
 
 static GtkWidget *big_button(const char *label, GCallback cb, gpointer data)
 {
     GtkWidget *b = gtk_button_new_with_label(label);
-    gtk_widget_set_size_request(b, 280, 48);
+    gtk_style_context_add_class(gtk_widget_get_style_context(b), "uf-choice");
+    gtk_widget_set_size_request(b, 300, 56);
+    gtk_widget_set_halign(b, GTK_ALIGN_FILL);
     g_signal_connect(b, "clicked", cb, data);
     return b;
 }
 
 static GtkWidget *build_home(void)
 {
-    GtkWidget *box, *title, *sub, *grid;
+    GtkWidget *box, *step, *title, *sub, *grid;
 
-    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
-    gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
-    gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
-    gtk_widget_set_margin_top(box, 36);
-    gtk_widget_set_margin_bottom(box, 36);
+    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 14);
+    gtk_widget_set_margin_top(box, 8);
+    gtk_widget_set_margin_bottom(box, 8);
+    gtk_widget_set_margin_start(box, 8);
+    gtk_widget_set_margin_end(box, 8);
+
+    step = gtk_label_new("USBFORGE LIVE  ·  USB LAB");
+    gtk_style_context_add_class(gtk_widget_get_style_context(step), "uf-step");
+    gtk_widget_set_halign(step, GTK_ALIGN_START);
 
     title = gtk_label_new(NULL);
     gtk_label_set_markup(GTK_LABEL(title),
-        "<span size='xx-large' weight='bold'>USBForge Live</span>");
-    sub = gtk_label_new("USB Lab - test, diagnose, learn, then install if you want");
-    gtk_widget_set_halign(title, GTK_ALIGN_CENTER);
-    gtk_widget_set_halign(sub, GTK_ALIGN_CENTER);
+        "<span size='x-large' weight='bold'>What do you want to do?</span>");
+    gtk_widget_set_halign(title, GTK_ALIGN_START);
+
+    sub = gtk_label_new(
+        "Booted media tools — test USB devices, read help, run diagnostics.\n"
+        "Install is optional.");
+    gtk_style_context_add_class(gtk_widget_get_style_context(sub), "uf-subtitle");
+    gtk_widget_set_halign(sub, GTK_ALIGN_START);
 
     grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 12);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 12);
-    gtk_widget_set_halign(grid, GTK_ALIGN_CENTER);
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+    gtk_widget_set_hexpand(grid, TRUE);
 
-    gtk_grid_attach(GTK_GRID(grid), big_button("USB Device Probe", G_CALLBACK(on_usb_probe), NULL), 0, 0, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), big_button("USB Read Speed Test", G_CALLBACK(on_usb_read_test), NULL), 1, 0, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), big_button("System Diagnostics", G_CALLBACK(on_diagnostics), NULL), 0, 1, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), big_button("Help & Docs", G_CALLBACK(on_show_page), (gpointer)"help"), 1, 1, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), big_button("Install / Copy Tools", G_CALLBACK(on_show_page), (gpointer)"install"), 0, 2, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), big_button("Device List", G_CALLBACK(on_show_page), (gpointer)"devices"), 1, 2, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), big_button("Check for Updates", G_CALLBACK(on_check_updates), NULL), 0, 3, 2, 1);
+    gtk_grid_attach(GTK_GRID(grid), big_button("USB device probe", G_CALLBACK(on_usb_probe), NULL), 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), big_button("USB read speed test", G_CALLBACK(on_usb_read_test), NULL), 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), big_button("System diagnostics", G_CALLBACK(on_diagnostics), NULL), 0, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), big_button("Help & documentation", G_CALLBACK(on_show_page), (gpointer)"help"), 1, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), big_button("Install / copy tools", G_CALLBACK(on_show_page), (gpointer)"install"), 0, 2, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), big_button("Device list", G_CALLBACK(on_show_page), (gpointer)"devices"), 1, 2, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), big_button("Check for updates", G_CALLBACK(on_check_updates), NULL), 0, 3, 2, 1);
 
+    gtk_box_pack_start(GTK_BOX(box), step, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), title, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(box), sub, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), sub, FALSE, FALSE, 4);
     gtk_box_pack_start(GTK_BOX(box), grid, FALSE, FALSE, 12);
     return box;
 }
@@ -700,8 +678,8 @@ static GtkWidget *build_install(void)
     gtk_cell_layout_pack_start(GTK_CELL_LAYOUT(app.install_target), renderer, TRUE);
     gtk_cell_layout_add_attribute(GTK_CELL_LAYOUT(app.install_target), renderer, "text", 0);
 
-    go = gtk_button_new_with_label("Copy USBForge to selected USB");
-    gtk_style_context_add_class(gtk_widget_get_style_context(go), "danger");
+    go = uf_primary_button("Copy USBForge to selected USB");
+    gtk_style_context_add_class(gtk_widget_get_style_context(go), "uf-danger");
     g_signal_connect(go, "clicked", G_CALLBACK(on_install), NULL);
 
     back = gtk_button_new_with_label("Back to Home");
@@ -721,33 +699,44 @@ static GtkWidget *build_install(void)
 
 static void activate(GtkApplication *gtk_app, gpointer user_data)
 {
-    GtkWidget *outer;
+    GtkWidget *outer, *header, *content, *footer;
     (void)user_data;
 
     memset(&app, 0, sizeof(app));
     app.window = gtk_application_window_new(gtk_app);
-    gtk_window_set_title(GTK_WINDOW(app.window), "USBForge Live - USB Lab");
-    gtk_window_set_default_size(GTK_WINDOW(app.window), 920, 640);
+    gtk_window_set_title(GTK_WINDOW(app.window), "USBForge Live — USB Lab");
+    gtk_window_set_default_size(GTK_WINDOW(app.window), 760, 560);
     gtk_window_set_position(GTK_WINDOW(app.window), GTK_WIN_POS_CENTER);
 
     apply_css();
 
     outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_style_context_add_class(gtk_widget_get_style_context(outer), "uf-root");
+    header = uf_header_bar("USBForge Live   ·   USB Lab   ·   v" USBFORGE_VERSION);
+
+    content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_style_context_add_class(gtk_widget_get_style_context(content), "uf-content");
+
     app.stack = gtk_stack_new();
-    gtk_stack_set_transition_type(GTK_STACK(app.stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
+    gtk_stack_set_transition_type(GTK_STACK(app.stack), GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
+    gtk_stack_set_transition_duration(GTK_STACK(app.stack), 220);
     gtk_stack_add_named(GTK_STACK(app.stack), build_home(), "home");
     gtk_stack_add_named(GTK_STACK(app.stack), build_devices(), "devices");
     gtk_stack_add_named(GTK_STACK(app.stack), build_results(), "results");
     gtk_stack_add_named(GTK_STACK(app.stack), build_help(), "help");
     gtk_stack_add_named(GTK_STACK(app.stack), build_install(), "install");
+    gtk_box_pack_start(GTK_BOX(content), app.stack, TRUE, TRUE, 0);
 
-    app.status = gtk_label_new("Welcome to USBForge Live. Pick a tool to begin.");
-    gtk_widget_set_margin_bottom(app.status, 10);
-    gtk_widget_set_margin_start(app.status, 16);
+    footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_style_context_add_class(gtk_widget_get_style_context(footer), "uf-footer");
+    app.status = gtk_label_new("Select a tool to begin.");
+    gtk_style_context_add_class(gtk_widget_get_style_context(app.status), "uf-status");
     gtk_widget_set_halign(app.status, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(footer), app.status, TRUE, TRUE, 0);
 
-    gtk_box_pack_start(GTK_BOX(outer), app.stack, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(outer), app.status, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(outer), header, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(outer), content, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(outer), footer, FALSE, FALSE, 0);
     gtk_container_add(GTK_CONTAINER(app.window), outer);
 
     refresh_devices();
