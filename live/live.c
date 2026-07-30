@@ -360,10 +360,25 @@ static void on_help_topic(GtkButton *btn, gpointer user_data)
     gtk_stack_set_visible_child_name(GTK_STACK(app.stack), "help");
 }
 
+static void open_releases_url(const char *url)
+{
+    char cmd[640];
+    const char *u = (url && url[0]) ? url : USBFORGE_RELEASES_URL;
+    GError *err = NULL;
+
+    if (gtk_show_uri_on_window(GTK_WINDOW(app.window), u, GDK_CURRENT_TIME, &err))
+        return;
+    if (err)
+        g_error_free(err);
+    snprintf(cmd, sizeof(cmd), "xdg-open '%s' >/dev/null 2>&1 &", u);
+    (void)system(cmd);
+}
+
 static void on_check_updates(GtkButton *btn, gpointer user_data)
 {
     UfUpdateInfo info;
     GtkWidget *dialog;
+    gint response;
     (void)btn;
     (void)user_data;
 
@@ -373,6 +388,17 @@ static void on_check_updates(GtkButton *btn, gpointer user_data)
 
     uf_check_for_updates(&info);
     set_status(info.message);
+
+    if (!info.ok) {
+        dialog = gtk_message_dialog_new(
+            GTK_WINDOW(app.window), GTK_DIALOG_MODAL,
+            GTK_MESSAGE_WARNING, GTK_BUTTONS_YES_NO, "%s", info.message);
+        response = gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+        if (response == GTK_RESPONSE_YES)
+            open_releases_url(info.html_url);
+        return;
+    }
 
     dialog = gtk_message_dialog_new(
         GTK_WINDOW(app.window),
@@ -387,7 +413,10 @@ static void on_check_updates(GtkButton *btn, gpointer user_data)
             "Run usbforge-update to install the latest package?");
     }
 
-    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_YES && info.update_available) {
+    response = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+
+    if (response == GTK_RESPONSE_YES && info.update_available) {
         if (uf_file_exists("/usr/bin/usbforge-update"))
             g_spawn_command_line_async(
                 "x-terminal-emulator -e usbforge-update || "
@@ -395,9 +424,8 @@ static void on_check_updates(GtkButton *btn, gpointer user_data)
         else if (uf_file_exists("scripts/usbforge-update.sh"))
             g_spawn_command_line_async("bash scripts/usbforge-update.sh", NULL);
         else
-            g_spawn_command_line_async("xdg-open " USBFORGE_RELEASES_URL, NULL);
+            open_releases_url(info.html_url);
     }
-    gtk_widget_destroy(dialog);
 }
 
 static void on_install(GtkButton *btn, gpointer user_data)

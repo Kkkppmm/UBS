@@ -2,7 +2,7 @@
 #define USBFORGE_H
 
 #define USBFORGE_NAME        "USBForge"
-#define USBFORGE_VERSION     "1.2.1"
+#define USBFORGE_VERSION     "1.2.2"
 #define USBFORGE_TAGLINE     "Create, test, and install bootable USB media"
 #define USBFORGE_DOCS_DIR    "docs"
 #define USBFORGE_ISO_LABEL   "USBFORGE"
@@ -50,12 +50,12 @@ typedef struct {
     char html_url[512];
     int  update_available; /* 1 if latest > installed */
     int  ok;               /* 1 if check succeeded */
-    char message[256];
+    char message[320];
 } UfUpdateInfo;
 
 /* Compare dotted versions like 1.1.0 vs 1.1.1; returns <0, 0, >0 */
 int  uf_version_cmp(const char *a, const char *b);
-/* Query GitHub Releases (needs curl or wget). Fills info. */
+/* Query GitHub Releases (curl, wget, or python3). Fills info. */
 int  uf_check_for_updates(UfUpdateInfo *info);
 
 /* Locate a packaged script (build-iso.sh, write-media.sh, ...). */

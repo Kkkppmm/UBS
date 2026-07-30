@@ -258,10 +258,18 @@ static void build_hint(void)
 static void check_updates(void)
 {
     UfUpdateInfo info;
-    char msg[512];
+    char msg[640];
     append_log("Checking for updates...");
     uf_check_for_updates(&info);
     append_log(info.message);
+    if (!info.ok) {
+        snprintf(msg, sizeof(msg), "%s", info.message);
+        if (MessageBoxA(g_hwnd, msg, "USBForge Update", MB_ICONWARNING | MB_YESNO) == IDYES)
+            ShellExecuteA(g_hwnd, "open",
+                          info.html_url[0] ? info.html_url : USBFORGE_RELEASES_URL,
+                          NULL, NULL, SW_SHOWNORMAL);
+        return;
+    }
     if (info.update_available) {
         snprintf(msg, sizeof(msg), "%s\n\nOpen downloads page now?", info.message);
         if (MessageBoxA(g_hwnd, msg, "USBForge Update", MB_ICONQUESTION | MB_YESNO) == IDYES)

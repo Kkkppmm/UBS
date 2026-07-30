@@ -119,41 +119,38 @@ void uf_human_size(unsigned long long bytes, char *out, int outlen)
 
 int uf_run_cmd(const char *cmd, char *out, int outlen)
 {
+    FILE *fp;
+    size_t n;
+    char discard[512];
+    int status;
+
+    if (!cmd)
+        return -1;
+
 #ifdef _WIN32
-    FILE *fp;
-    size_t n;
-    if (!cmd)
-        return -1;
     fp = _popen(cmd, "r");
-    if (!fp)
-        return -1;
-    if (out && outlen > 0) {
-        n = fread(out, 1, (size_t)outlen - 1, fp);
-        out[n] = '\0';
-    } else {
-        char discard[256];
-        while (fread(discard, 1, sizeof(discard), fp) > 0)
-            ;
-    }
-    return _pclose(fp);
 #else
-    FILE *fp;
-    size_t n;
-    if (!cmd)
-        return -1;
     fp = popen(cmd, "r");
+#endif
     if (!fp)
         return -1;
+
     if (out && outlen > 0) {
         n = fread(out, 1, (size_t)outlen - 1, fp);
         out[n] = '\0';
-    } else {
-        char discard[256];
-        while (fread(discard, 1, sizeof(discard), fp) > 0)
-            ;
     }
-    return pclose(fp);
+
+    /* Drain remaining stdout so the child is not killed by SIGPIPE when we
+     * close the pipe early (common when JSON responses exceed outlen). */
+    while (fread(discard, 1, sizeof(discard), fp) > 0)
+        ;
+
+#ifdef _WIN32
+    status = _pclose(fp);
+#else
+    status = pclose(fp);
 #endif
+    return status;
 }
 
 #ifdef _WIN32
@@ -415,49 +412,130 @@ static void json_extract_string(const char *json, const char *key, char *out, in
     out[q - p] = '\0';
 }
 
+/* True if buf looks like usable GitHub release JSON (tag_name near start). */
+static int update_json_usable(const char *buf)
+{
+    const char *p = buf;
+    if (!p)
+        return 0;
+    while (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t')
+        p++;
+    return *p == '{';
+}
+
 int uf_check_for_updates(UfUpdateInfo *info)
 {
-    char cmd[512];
+    char cmd[900];
     char buf[USBFORGE_MAX_LOG];
     char tag[64];
     const char *ver;
-    int rc;
+    const char *p;
+    int got = 0;
 
     if (!info)
         return -1;
     memset(info, 0, sizeof(*info));
+    snprintf(info->html_url, sizeof(info->html_url), "%s", USBFORGE_RELEASES_URL);
+    buf[0] = '\0';
 
 #ifdef _WIN32
+    /* Prefer curl; fall back to PowerShell (tag only → wrap as JSON) */
     snprintf(cmd, sizeof(cmd),
-             "curl.exe -fsSL -A USBForge/%s \"%s\" 2>nul",
+             "curl.exe -fsSL --connect-timeout 8 -A \"USBForge/%s\" "
+             "-H \"Accept: application/vnd.github+json\" \"%s\" 2>nul",
              USBFORGE_VERSION, USBFORGE_RELEASES_API);
+    uf_run_cmd(cmd, buf, sizeof(buf));
+    if (update_json_usable(buf)) {
+        got = 1;
+    } else {
+        buf[0] = '\0';
+        snprintf(cmd, sizeof(cmd),
+                 "powershell.exe -NoProfile -Command "
+                 "\"try { (Invoke-RestMethod -Uri '%s' -TimeoutSec 10).tag_name } "
+                 "catch { '' }\"",
+                 USBFORGE_RELEASES_API);
+        uf_run_cmd(cmd, buf, sizeof(buf));
+        if (buf[0] && buf[0] != '{') {
+            char tagonly[64];
+            size_t n = 0;
+            while (buf[n] && buf[n] != '\r' && buf[n] != '\n' && n + 1 < sizeof(tagonly)) {
+                tagonly[n] = buf[n];
+                n++;
+            }
+            tagonly[n] = '\0';
+            if (tagonly[0] == 'v' || (tagonly[0] >= '0' && tagonly[0] <= '9')) {
+                snprintf(buf, sizeof(buf),
+                         "{\"tag_name\":\"%s\",\"html_url\":\"%s/tag/%s\"}",
+                         tagonly, USBFORGE_RELEASES_URL, tagonly);
+                got = 1;
+            }
+        } else if (update_json_usable(buf)) {
+            got = 1;
+        }
+    }
 #else
+    /* Prefer a tiny JSON payload via python (avoids huge release bodies).
+     * Fall back to curl/wget raw JSON — tag_name is near the start. */
     snprintf(cmd, sizeof(cmd),
-             "curl -fsSL -A 'USBForge/%s' '%s' 2>/dev/null || "
-             "wget -qO- --user-agent='USBForge/%s' '%s' 2>/dev/null",
-             USBFORGE_VERSION, USBFORGE_RELEASES_API,
-             USBFORGE_VERSION, USBFORGE_RELEASES_API);
+             "python3 -c \"import json,urllib.request; "
+             "r=urllib.request.Request('%s', headers={"
+             "'User-Agent':'USBForge/%s',"
+             "'Accept':'application/vnd.github+json'}); "
+             "d=json.load(urllib.request.urlopen(r, timeout=10)); "
+             "print('{\\\"tag_name\\\":\\\"'+d.get('tag_name','')+"
+             "'\\\",\\\"html_url\\\":\\\"'+d.get('html_url','')+'\\\"}')\" "
+             "2>/dev/null",
+             USBFORGE_RELEASES_API, USBFORGE_VERSION);
+    uf_run_cmd(cmd, buf, sizeof(buf));
+    if (update_json_usable(buf))
+        got = 1;
+
+    if (!got) {
+        buf[0] = '\0';
+        snprintf(cmd, sizeof(cmd),
+                 "curl -fsSL --connect-timeout 8 -A 'USBForge/%s' "
+                 "-H 'Accept: application/vnd.github+json' '%s' 2>/dev/null",
+                 USBFORGE_VERSION, USBFORGE_RELEASES_API);
+        uf_run_cmd(cmd, buf, sizeof(buf));
+        if (update_json_usable(buf))
+            got = 1;
+    }
+
+    if (!got) {
+        buf[0] = '\0';
+        snprintf(cmd, sizeof(cmd),
+                 "wget -qO- --timeout=8 --user-agent='USBForge/%s' "
+                 "--header='Accept: application/vnd.github+json' '%s' 2>/dev/null",
+                 USBFORGE_VERSION, USBFORGE_RELEASES_API);
+        uf_run_cmd(cmd, buf, sizeof(buf));
+        if (update_json_usable(buf))
+            got = 1;
+    }
 #endif
 
-    buf[0] = '\0';
-    rc = uf_run_cmd(cmd, buf, sizeof(buf));
-    if (rc != 0 || !buf[0] || buf[0] != '{') {
+    p = buf;
+    while (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t')
+        p++;
+
+    if (!got || !*p || *p != '{') {
         info->ok = 0;
         snprintf(info->message, sizeof(info->message),
-                 "Could not reach update server. Check your network (needs curl/wget).");
+                 "Could not check for updates right now.\n"
+                 "Open the releases page in your browser instead?");
+        return -1;
+    }
+
+    json_extract_string(p, "tag_name", tag, sizeof(tag));
+    json_extract_string(p, "html_url", info->html_url, sizeof(info->html_url));
+    if (!tag[0]) {
+        info->ok = 0;
+        snprintf(info->message, sizeof(info->message),
+                 "Update server responded, but the version could not be read.\n"
+                 "Open the releases page to check manually?");
         snprintf(info->html_url, sizeof(info->html_url), "%s", USBFORGE_RELEASES_URL);
         return -1;
     }
 
-    json_extract_string(buf, "tag_name", tag, sizeof(tag));
-    json_extract_string(buf, "html_url", info->html_url, sizeof(info->html_url));
-    if (!tag[0]) {
-        info->ok = 0;
-        snprintf(info->message, sizeof(info->message), "Unexpected response from update server.");
-        return -1;
-    }
-
-    /* strip leading v */
     ver = tag;
     if (ver[0] == 'v' || ver[0] == 'V')
         ver++;

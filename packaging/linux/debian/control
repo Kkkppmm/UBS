@@ -1,10 +1,10 @@
 Package: usbforge
-Version: 1.2.1
+Version: 1.2.2
 Section: utils
 Priority: optional
 Architecture: amd64
 Depends: libgtk-3-0, xorriso
-Recommends: grub-common, grub-pc-bin, mtools, pkexec, curl | wget, parted, dosfstools, rsync, wimtools
+Recommends: grub-common, grub-pc-bin, mtools, pkexec, curl | wget | python3, parted, dosfstools, rsync, wimtools
 Maintainer: USBForge Contributors <usbforge@localhost>
 Description: Bootable ISO builder and Live USB Lab
  USBForge creates bootable media (including Windows ISOs to USB), builds
