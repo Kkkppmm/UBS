@@ -86,6 +86,7 @@ fi
 /usr/bin/usbforge-live
 /usr/bin/usbforge-update
 /usr/share/usbforge
+/usr/share/polkit-1/actions/com.usbforge.write-media.policy
 /usr/share/applications/usbforge-builder.desktop
 /usr/share/applications/usbforge-live.desktop
 /usr/share/icons/hicolor
