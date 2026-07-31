@@ -17,18 +17,35 @@ Use this for a Windows 10/11 ISO or any Linux hybrid ISO you already downloaded.
 | **Windows** | Partition + FAT32, copy files; splits `install.wim` if >4GB (needs `wimtools`) |
 | **Linux / hybrid** | Raw `dd` image write (retries without `oflag=direct` if needed) |
 
-USBForge runs a **preflight check** before writing. If tools are missing, the UI shows the exact packages to install instead of a generic failure.
+USBForge runs a **preflight check** before writing. Missing packages are **installed automatically** (apt/dnf/pacman/zypper) when you approve the administrator prompt.
 
-### Required packages (Debian/Ubuntu)
+### Auto-install
+
+On Create, USBForge elevates once and installs whatever is missing for the write:
+
+| Distro | Packages |
+|--------|----------|
+| Debian/Ubuntu | `parted` `dosfstools` `rsync` `wimtools` `pkexec` |
+| Fedora | `parted` `dosfstools` `rsync` `wimlib-utils` `polkit` |
+| Arch | `parted` `dosfstools` `rsync` `wimlib` `polkit` |
+
+Disable with `USBFORGE_NO_AUTO_DEPS=1` if you prefer manual installs.
+
+### Manual check / install
 
 ```bash
-sudo apt-get install -y pkexec parted dosfstools rsync wimtools
+bash scripts/write-media.sh --check-deps /path/to/windows.iso
+bash scripts/write-media.sh --ensure-deps /path/to/windows.iso   # prompts for admin
+bash scripts/write-media.sh --install-deps /path/to/windows.iso  # already root
 ```
 
-### Required packages (Fedora)
+### Required privilege helper
+
+You still need **either** `pkexec` (PolicyKit) **or** `sudo` so USBForge can elevate. If both are missing, install one manually first:
 
 ```bash
-sudo dnf install -y polkit parted dosfstools rsync wimlib-utils
+# Debian/Ubuntu
+sudo apt-get install -y pkexec
 ```
 
 ### Manual write helper
@@ -37,7 +54,7 @@ sudo dnf install -y polkit parted dosfstools rsync wimlib-utils
 # Check tools only
 bash scripts/write-media.sh --check-deps /path/to/windows.iso
 
-# Write (prompts for admin)
+# Write (prompts for admin; auto-installs deps)
 bash scripts/usbforge-write.sh /path/to/file.iso /dev/sdX
 ```
 

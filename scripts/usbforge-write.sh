@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # usbforge-write — elevate and run write-media.sh (pkexec preferred, sudo fallback).
+# Auto-installs missing packages (parted, dosfstools, rsync, wimtools, …) during the
+# elevated write session.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -10,6 +12,9 @@ SCRIPT="$ROOT/write-media.sh"
 if [[ "${1:-}" == "--check-deps" ]]; then
     exec bash "$SCRIPT" --check-deps "${2:-}"
 fi
+if [[ "${1:-}" == "--ensure-deps" || "${1:-}" == "--install-deps" ]]; then
+    exec bash "$SCRIPT" "$1" "${2:-}"
+fi
 
 ISO="${1:-}"
 DEV="${2:-}"
@@ -18,9 +23,17 @@ DEV="${2:-}"
     exit 1
 }
 
-# Preflight without root so the UI can show a clear message
-if ! bash "$SCRIPT" --check-deps "$ISO"; then
+# Soft preflight: if deps missing but elevation works, continue (auto-install as root)
+set +e
+bash "$SCRIPT" --check-deps "$ISO"
+rc=$?
+set -e
+if [[ $rc -eq 1 ]]; then
+    echo "[usbforge] ERROR: missing packages and cannot auto-install (need pkexec or sudo)." >&2
     exit 2
+fi
+if [[ $rc -eq 2 ]]; then
+    echo "[usbforge] Missing tools will be installed automatically (admin password may be required)."
 fi
 
 run_root() {
@@ -28,7 +41,6 @@ run_root() {
         exec bash "$SCRIPT" "$ISO" "$DEV"
     fi
     if command -v pkexec >/dev/null 2>&1; then
-        # Preserve a sane PATH; pkexec clears env by default on some systems
         exec pkexec /bin/bash "$SCRIPT" "$ISO" "$DEV"
     fi
     if command -v sudo >/dev/null 2>&1; then

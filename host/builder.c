@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #include "usbforge.h"
 
@@ -383,7 +384,7 @@ static void do_create(const char *mode, const char *iso, const char *usb)
 
     is_win = uf_iso_is_windows(iso);
 
-    /* Preflight: tools + privilege helper (no root yet) */
+    /* Preflight: allow auto-install when elevation is available */
     {
         char check_cmd[USBFORGE_MAX_PATH * 4];
         char check_out[USBFORGE_MAX_LOG];
@@ -391,6 +392,7 @@ static void do_create(const char *mode, const char *iso, const char *usb)
         const char *wmedia = uf_find_script("write-media.sh");
         char *qscript, *qiso;
         int rc;
+        int exit_code;
 
         if (!wmedia && !writer) {
             ui_send_event("{\"event\":\"job_done\",\"ok\":false,\"message\":\"Could not find write-media.sh. Reinstall USBForge or run from the source tree.\"}");
@@ -403,9 +405,18 @@ static void do_create(const char *mode, const char *iso, const char *usb)
         g_free(qiso);
         check_out[0] = '\0';
         rc = uf_run_cmd(check_cmd, check_out, sizeof(check_out));
-        if (rc != 0) {
+#ifndef _WIN32
+        if (WIFEXITED(rc))
+            exit_code = WEXITSTATUS(rc);
+        else
+            exit_code = (rc != 0) ? 1 : 0;
+#else
+        exit_code = rc;
+#endif
+        /* 0 = ok, 2 = missing but auto-install available, 1 = hard fail */
+        if (exit_code == 1) {
             char *esc = json_escape(check_out[0] ? check_out :
-                "Missing tools to write USB media. Install: pkexec parted dosfstools rsync wimtools");
+                "Missing tools and cannot auto-install. Install pkexec or sudo, then retry.");
             char *json = g_strdup_printf(
                 "{\"event\":\"job_done\",\"ok\":false,\"message\":\"USB write preflight failed.\\n\\n%s\"}",
                 esc);
@@ -416,12 +427,15 @@ static void do_create(const char *mode, const char *iso, const char *usb)
         }
         if (check_out[0])
             ui_log(check_out);
+        if (exit_code == 2)
+            ui_log("Missing packages will be installed automatically when you confirm (admin password may be required).");
     }
 
     confirm = gtk_message_dialog_new(
         GTK_WINDOW(app.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
         "Everything on %s will be deleted.\n\n"
-        "%s bootable media will be created from:\n%s",
+        "%s bootable media will be created from:\n%s\n\n"
+        "If tools are missing, USBForge will install them automatically.",
         usb, is_win ? "Windows" : "ISO", iso);
     res = gtk_dialog_run(GTK_DIALOG(confirm));
     gtk_widget_destroy(confirm);
@@ -458,9 +472,9 @@ static void do_create(const char *mode, const char *iso, const char *usb)
                   is_win
                       ? "Windows USB media is ready. You can boot from this drive."
                       : "USB media is ready. You can boot from this drive.",
-                  "USB write failed. See log above. Typical fixes: install pkexec (or sudo), "
-                  "parted, dosfstools, rsync; for large install.wim install wimtools; "
-                  "ensure the USB is plugged in and not mounted elsewhere.");
+                  "USB write failed. See log above. USBForge auto-installs parted/dosfstools/"
+                  "rsync/wimtools when possible — approve the admin prompt, ensure the USB "
+                  "is plugged in, and retry.");
     }
 }
 

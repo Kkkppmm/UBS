@@ -6,7 +6,9 @@
 # Usage:
 #   write-media.sh <iso-path> <block-device>     e.g. /dev/sdb
 #   write-media.sh --check-deps [iso-path]      exit 0 if ready; print missing pkgs
+#   write-media.sh --install-deps [iso-path]    install missing pkgs (root)
 # Must run as root for the write path (pkexec/sudo).
+# Missing tools are auto-installed when running as root (unless USBFORGE_NO_AUTO_DEPS=1).
 set -euo pipefail
 
 ISO="${1:-}"
@@ -23,63 +25,259 @@ need_root() {
     fi
 }
 
-# --- dependency preflight (no root required) ---
-check_deps() {
+can_elevate() {
+    [[ "$(id -u)" -eq 0 ]] || have pkexec || have sudo
+}
+
+detect_windows_iso() {
     local iso="${1:-}"
-    local missing=()
-    local warn=()
-    local is_win=0
+    [[ -n "$iso" && -f "$iso" ]] || { echo 1; return; }
+    if have xorriso; then
+        if xorriso -indev "$iso" -find /bootmgr -exec report_lba -- 2>/dev/null | grep -q bootmgr \
+            || xorriso -indev "$iso" -find /sources -exec report_lba -- 2>/dev/null | grep -q sources; then
+            echo 1
+            return
+        fi
+    fi
+    local base
+    base="$(basename "$iso")"
+    if [[ "$base" == Win* || "$base" == *Windows* || "$base" == *WIN1* || "$base" == *Win1* ]]; then
+        echo 1
+        return
+    fi
+    echo 0
+}
+
+# Populate global-ish arrays via namerefs-style echo — return missing cmds as lines
+collect_missing_cmds() {
+    local iso="${1:-}"
+    local is_win
+    is_win="$(detect_windows_iso "$iso")"
 
     if [[ "$(id -u)" -ne 0 ]]; then
         if ! have pkexec && ! have sudo; then
-            missing+=("pkexec|policykit-1 (or sudo)")
+            echo "elevation"
         fi
     fi
 
-    if [[ -n "$iso" && -f "$iso" ]]; then
-        if have xorriso; then
-            if xorriso -indev "$iso" -find /bootmgr -exec report_lba -- 2>/dev/null | grep -q bootmgr \
-                || xorriso -indev "$iso" -find /sources -exec report_lba -- 2>/dev/null | grep -q sources; then
-                is_win=1
-            fi
-        fi
-        local base
-        base="$(basename "$iso")"
-        if [[ "$base" == Win* || "$base" == *Windows* || "$base" == *WIN1* || "$base" == *Win1* ]]; then
-            is_win=1
-        fi
-    else
-        # Assume Windows path tools may be needed when ISO unknown
-        is_win=1
-    fi
-
-    if [[ "$is_win" -eq 1 ]]; then
-        have parted || missing+=("parted")
-        have mkfs.vfat || missing+=("dosfstools")
-        have rsync || missing+=("rsync")
-        have wipefs || missing+=("util-linux")
+    if [[ "$is_win" == "1" ]]; then
+        have parted || echo "parted"
+        have mkfs.vfat || echo "dosfstools"
+        have rsync || echo "rsync"
+        have wipefs || echo "util-linux"
+        # Always pull wimtools for Windows ISOs so large WIMs work without a second pass
         if ! have wimlib-imagex && ! have wimsplit; then
-            warn+=("wimtools (required only when install.wim is larger than 4GB)")
+            echo "wimtools"
         fi
     fi
-    have dd || missing+=("coreutils")
-    have mount || missing+=("util-linux")
+    have dd || echo "coreutils"
+    have mount || echo "util-linux"
+}
 
-    if ((${#missing[@]})); then
-        echo "[usbforge] MISSING: ${missing[*]}"
-        echo "[usbforge] Install (Debian/Ubuntu): sudo apt-get install -y pkexec parted dosfstools rsync wimtools"
-        echo "[usbforge] Install (Fedora): sudo dnf install -y polkit parted dosfstools rsync wimlib-utils"
+# Map logical need → distro package names (space-separated on stdout)
+packages_for_distro() {
+    local kind="$1" # apt|dnf|pacman|zypper
+    local need="$2"
+    case "$kind:$need" in
+        apt:elevation) echo "pkexec policykit-1" ;;
+        apt:parted) echo "parted" ;;
+        apt:dosfstools) echo "dosfstools" ;;
+        apt:rsync) echo "rsync" ;;
+        apt:util-linux) echo "util-linux" ;;
+        apt:wimtools) echo "wimtools" ;;
+        apt:coreutils) echo "coreutils" ;;
+        dnf:elevation) echo "polkit" ;;
+        dnf:parted) echo "parted" ;;
+        dnf:dosfstools) echo "dosfstools" ;;
+        dnf:rsync) echo "rsync" ;;
+        dnf:util-linux) echo "util-linux" ;;
+        dnf:wimtools) echo "wimlib-utils" ;;
+        dnf:coreutils) echo "coreutils" ;;
+        pacman:elevation) echo "polkit" ;;
+        pacman:parted) echo "parted" ;;
+        pacman:dosfstools) echo "dosfstools" ;;
+        pacman:rsync) echo "rsync" ;;
+        pacman:util-linux) echo "util-linux" ;;
+        pacman:wimtools) echo "wimlib" ;;
+        pacman:coreutils) echo "coreutils" ;;
+        zypper:elevation) echo "polkit" ;;
+        zypper:parted) echo "parted" ;;
+        zypper:dosfstools) echo "dosfstools" ;;
+        zypper:rsync) echo "rsync" ;;
+        zypper:util-linux) echo "util-linux" ;;
+        zypper:wimtools) echo "wimlib-utils" ;;
+        zypper:coreutils) echo "coreutils" ;;
+        *) echo "" ;;
+    esac
+}
+
+detect_pkg_kind() {
+    if have apt-get; then echo apt
+    elif have dnf; then echo dnf
+    elif have yum && ! have dnf; then echo yum
+    elif have pacman; then echo pacman
+    elif have zypper; then echo zypper
+    else echo unknown
+    fi
+}
+
+resolve_packages() {
+    local iso="${1:-}"
+    local kind need pkgs=()
+    kind="$(detect_pkg_kind)"
+    [[ "$kind" != "unknown" ]] || return 1
+    # yum uses same package names as dnf mapping
+    local map_kind="$kind"
+    [[ "$kind" == "yum" ]] && map_kind="dnf"
+
+    while IFS= read -r need; do
+        [[ -n "$need" ]] || continue
+        # shellcheck disable=SC2207
+        pkgs+=( $(packages_for_distro "$map_kind" "$need") )
+    done < <(collect_missing_cmds "$iso" | sort -u)
+
+    if ((${#pkgs[@]} == 0)); then
         return 1
     fi
-    if ((${#warn[@]})); then
-        echo "[usbforge] NOTE: ${warn[*]}"
-    fi
-    echo "[usbforge] Dependencies OK"
+    # unique
+    printf '%s\n' "${pkgs[@]}" | awk 'NF && !seen[$0]++' | tr '\n' ' '
     return 0
+}
+
+check_deps() {
+    local iso="${1:-}"
+    local missing=()
+    local need
+
+    while IFS= read -r need; do
+        [[ -n "$need" ]] || continue
+        missing+=("$need")
+    done < <(collect_missing_cmds "$iso")
+
+    if ((${#missing[@]} == 0)); then
+        echo "[usbforge] Dependencies OK"
+        return 0
+    fi
+
+    echo "[usbforge] MISSING: ${missing[*]}"
+    local pkgs
+    if pkgs="$(resolve_packages "$iso")"; then
+        echo "[usbforge] PACKAGES: $pkgs"
+        if can_elevate; then
+            echo "[usbforge] AUTO_INSTALL: available (will install with pkexec/sudo)"
+            return 2
+        fi
+    fi
+    echo "[usbforge] Install (Debian/Ubuntu): sudo apt-get install -y pkexec parted dosfstools rsync wimtools"
+    echo "[usbforge] Install (Fedora): sudo dnf install -y polkit parted dosfstools rsync wimlib-utils"
+    return 1
+}
+
+install_deps() {
+    local iso="${1:-}"
+    need_root
+
+    local kind pkgs still
+    kind="$(detect_pkg_kind)"
+    if [[ "$kind" == "unknown" ]]; then
+        die "No supported package manager found (apt-get/dnf/pacman/zypper)"
+    fi
+
+    still="$(collect_missing_cmds "$iso" | grep -v '^elevation$' || true)"
+    if [[ -z "$still" ]]; then
+        log "Dependencies already installed"
+        return 0
+    fi
+
+    pkgs="$(resolve_packages "$iso" || true)"
+    if [[ -z "${pkgs// /}" ]]; then
+        die "Missing tools ($still) but could not map them to packages for $kind"
+    fi
+
+    log "Installing packages: $pkgs"
+    case "$kind" in
+        apt)
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -y || log "apt-get update failed — continuing with existing indexes"
+            # shellcheck disable=SC2086
+            apt-get install -y $pkgs
+            ;;
+        dnf)
+            # shellcheck disable=SC2086
+            dnf install -y $pkgs
+            ;;
+        yum)
+            # shellcheck disable=SC2086
+            yum install -y $pkgs
+            ;;
+        pacman)
+            # shellcheck disable=SC2086
+            pacman -Sy --noconfirm --needed $pkgs
+            ;;
+        zypper)
+            # shellcheck disable=SC2086
+            zypper --non-interactive install -y $pkgs
+            ;;
+    esac
+
+    still="$(collect_missing_cmds "$iso" | grep -v '^elevation$' || true)"
+    if [[ -n "$still" ]]; then
+        die "Still missing after install: $still"
+    fi
+    log "Package install complete"
+    return 0
+}
+
+ensure_deps() {
+    local iso="${1:-}"
+    local rc=0
+    set +e
+    check_deps "$iso"
+    rc=$?
+    set -e
+    if [[ $rc -eq 0 ]]; then
+        return 0
+    fi
+    if [[ "${USBFORGE_NO_AUTO_DEPS:-}" == "1" ]]; then
+        die "Missing dependencies and USBFORGE_NO_AUTO_DEPS=1"
+    fi
+    if [[ $rc -eq 2 ]] || can_elevate; then
+        if [[ "$(id -u)" -eq 0 ]]; then
+            install_deps "$iso"
+            return 0
+        fi
+        # Elevate only for install
+        local self
+        self="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+        log "Requesting administrator permission to install USB write tools..."
+        if have pkexec; then
+            pkexec /bin/bash "$self" --install-deps "${iso}"
+        elif have sudo; then
+            sudo /bin/bash "$self" --install-deps "${iso}"
+        else
+            die "Need pkexec or sudo to auto-install packages"
+        fi
+        # Verify
+        set +e
+        check_deps "$iso"
+        rc=$?
+        set -e
+        [[ $rc -eq 0 ]] || die "Dependencies still missing after auto-install"
+        return 0
+    fi
+    die "Missing dependencies and cannot auto-install (no pkexec/sudo)"
 }
 
 if [[ "${1:-}" == "--check-deps" ]]; then
     check_deps "${2:-}"
+    exit $?
+fi
+if [[ "${1:-}" == "--install-deps" ]]; then
+    install_deps "${2:-}"
+    exit $?
+fi
+if [[ "${1:-}" == "--ensure-deps" ]]; then
+    ensure_deps "${2:-}"
     exit $?
 fi
 
@@ -87,6 +285,11 @@ fi
 [[ -f "$ISO" ]] || die "ISO not found: $ISO"
 [[ -b "$DEV" ]] || die "Not a block device: $DEV"
 need_root
+
+# Auto-install any missing write tools while we already have root
+if [[ "${USBFORGE_NO_AUTO_DEPS:-}" != "1" ]]; then
+    install_deps "$ISO"
+fi
 
 # Resolve /dev/disk/by-id etc to real device node
 if have readlink; then
