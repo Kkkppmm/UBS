@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+chmod 755 /usr/bin/usbforge-builder /usr/bin/usbforge-live /usr/bin/usbforge-update 2>/dev/null || true
+
+# Refresh desktop/menu databases so USBForge appears in the app menu
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications 2>/dev/null || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+fi
+if command -v xdg-desktop-menu >/dev/null 2>&1; then
+    xdg-desktop-menu forceupdate 2>/dev/null || true
+fi
+# Some desktops (GNOME) pick up new .desktop files after a mime/cache refresh
+if command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database /usr/share/mime 2>/dev/null || true
+fi
+
+exit 0
