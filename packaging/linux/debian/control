@@ -1,0 +1,13 @@
+Package: usbforge
+Version: 1.5.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libgtk-3-0, libwebkit2gtk-4.1-0, xorriso
+Recommends: grub-common, grub-pc-bin, mtools, pkexec, curl | wget | python3, parted, dosfstools, rsync, wimtools
+Maintainer: USBForge Contributors <usbforge@localhost>
+Description: Bootable ISO builder and Live USB Lab
+ USBForge creates bootable media (including Windows ISOs to USB), builds
+ USBForge ISOs, and provides a Live USB Lab GUI for testing and docs.
+ Includes menu launchers, icons, and an updater (usbforge-update).
+Homepage: https://github.com/Kkkppmm/UBS

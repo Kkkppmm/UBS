@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#A31F34" />
+  <title>USBForge Companion</title>
+  <link rel="stylesheet" href="fonts/fonts.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="rail" aria-hidden="true"></div>
+  <div id="app" class="app">
+    <header class="top">
+      <div class="brand-block">
+        <p class="brand">USBForge</p>
+        <p class="tag">Companion · Lab</p>
+      </div>
+      <button type="button" class="chip" id="btn-account">Sign in</button>
+    </header>
+
+    <nav class="tabs" id="tabs" aria-label="Primary">
+      <button type="button" class="tab on" data-tab="updates"><span>Updates</span></button>
+      <button type="button" class="tab" data-tab="community"><span>Community</span></button>
+      <button type="button" class="tab" data-tab="feedback"><span>Feedback</span></button>
+      <button type="button" class="tab" data-tab="account"><span>Account</span></button>
+      <div class="tab-indicator" id="tab-indicator"></div>
+    </nav>
+
+    <main class="main">
+      <section class="panel on" id="panel-updates">
+        <section class="hero" id="app-update-card">
+          <p class="eyebrow">System status</p>
+          <h1 id="app-update-title">Checking…</h1>
+          <p id="app-update-body" class="lede">Looking for Companion releases.</p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-check-update">Check again</button>
+            <a class="btn ghost" id="btn-download-apk" href="#" hidden target="_blank" rel="noopener">Download APK</a>
+          </div>
+        </section>
+
+        <section class="block" id="desktop-card">
+          <header class="block-head">
+            <div>
+              <p class="eyebrow">Desktop releases</p>
+              <h2 id="desktop-title">Latest USBForge</h2>
+              <p id="desktop-meta" class="meta-line"></p>
+            </div>
+            <a class="btn primary" id="btn-desktop-release" href="#" target="_blank" rel="noopener">Open</a>
+          </header>
+          <pre id="desktop-notes" class="notes"></pre>
+          <div id="asset-list" class="assets"></div>
+        </section>
+      </section>
+
+      <section class="panel" id="panel-community">
+        <section class="block">
+          <header class="block-head">
+            <div>
+              <p class="eyebrow">Lab network</p>
+              <h2>Community</h2>
+              <p class="lede tight">Share workflows, questions, and builds with other USBForge users.</p>
+            </div>
+            <button type="button" class="btn primary" id="btn-new-post">New post</button>
+          </header>
+        </section>
+
+        <section id="post-composer" class="composer block" hidden>
+          <label class="field">
+            <span>Title</span>
+            <input id="post-title" class="input" placeholder="Short title" maxlength="120" />
+          </label>
+          <label class="field">
+            <span>Kind</span>
+            <select id="post-kind" class="input">
+              <option value="share">Share</option>
+              <option value="tip">Tip</option>
+              <option value="question">Question</option>
+              <option value="feedback">Feedback</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Body</span>
+            <textarea id="post-body" class="input area" rows="5" placeholder="Write your post…"></textarea>
+          </label>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-submit-post">Publish</button>
+            <button type="button" class="btn ghost" id="btn-cancel-post">Cancel</button>
+          </div>
+        </section>
+
+        <div id="posts" class="feed"></div>
+      </section>
+
+      <section class="panel" id="panel-feedback">
+        <section class="block">
+          <p class="eyebrow">Signal</p>
+          <h2>Send feedback</h2>
+          <p class="lede">Tell us what works, what’s broken, or what you want next.</p>
+          <div class="stars" id="stars" role="group" aria-label="Rating">
+            <button type="button" data-r="1" aria-label="1 star">★</button>
+            <button type="button" data-r="2" aria-label="2 stars">★</button>
+            <button type="button" data-r="3" aria-label="3 stars">★</button>
+            <button type="button" data-r="4" aria-label="4 stars">★</button>
+            <button type="button" data-r="5" aria-label="5 stars">★</button>
+          </div>
+          <label class="field">
+            <span>Message</span>
+            <textarea id="feedback-msg" class="input area" rows="6" placeholder="Your feedback…"></textarea>
+          </label>
+          <label class="field">
+            <span>Email <em>(optional if signed in)</em></span>
+            <input id="feedback-email" class="input" placeholder="you@lab.edu" />
+          </label>
+          <button type="button" class="btn primary" id="btn-send-feedback">Submit feedback</button>
+          <p id="feedback-status" class="status"></p>
+        </section>
+      </section>
+
+      <section class="panel" id="panel-account">
+        <section class="block" id="auth-signed-out">
+          <p class="eyebrow">Identity</p>
+          <h2 id="auth-title">Sign in</h2>
+          <p class="lede tight">Access community posting and sync preferences.</p>
+          <div class="seg" role="tablist">
+            <button type="button" class="seg-btn on" data-mode="signin">Sign in</button>
+            <button type="button" class="seg-btn" data-mode="signup">Sign up</button>
+          </div>
+          <label class="field" id="auth-name-field" hidden>
+            <span>Display name</span>
+            <input id="auth-name" class="input" placeholder="Name" />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input id="auth-email" class="input" type="email" placeholder="you@lab.edu" autocomplete="username" />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input id="auth-pass" class="input" type="password" placeholder="8+ characters" autocomplete="current-password" />
+          </label>
+          <button type="button" class="btn primary" id="btn-auth">Sign in</button>
+          <p id="auth-status" class="status"></p>
+        </section>
+        <section class="block" id="auth-signed-in" hidden>
+          <p class="eyebrow">Session</p>
+          <h2>Signed in</h2>
+          <p id="whoami" class="whoami"></p>
+          <button type="button" class="btn ghost" id="btn-signout">Sign out</button>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+  </div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.USBForgeCompanion" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/uf_red</item>
+        <item name="colorPrimaryVariant">@color/uf_red_dark</item>
+        <item name="colorSecondary">@color/uf_red</item>
+        <item name="android:statusBarColor">@color/uf_red</item>
+        <item name="android:navigationBarColor">@color/uf_canvas</item>
+        <item name="android:windowBackground">@color/uf_canvas</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
