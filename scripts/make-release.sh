@@ -17,13 +17,17 @@ make -C "$ROOT" all iso
 TAR_NAME="usbforge-${VERSION}-linux-x86_64"
 STAGE="$OUT/$TAR_NAME"
 rm -rf "$STAGE"
-mkdir -p "$STAGE/bin" "$STAGE/docs" "$STAGE/scripts" "$STAGE/share/applications" "$STAGE/share/icons/hicolor"
+mkdir -p "$STAGE/bin" "$STAGE/docs" "$STAGE/scripts" "$STAGE/share/applications" "$STAGE/share/icons/hicolor" \
+  "$STAGE/share/polkit-1/actions"
 cp "$ROOT/build/usbforge-builder" "$ROOT/build/usbforge-live" "$STAGE/bin/"
 cp "$ROOT/scripts/usbforge-update.sh" "$STAGE/bin/usbforge-update"
 cp "$ROOT/docs/"* "$STAGE/docs/"
 cp "$ROOT/scripts/"*.sh "$STAGE/scripts/" 2>/dev/null || true
 cp "$ROOT/packaging/linux/"*.desktop "$STAGE/share/applications/"
 cp -a "$ROOT/packaging/linux/icons/hicolor/." "$STAGE/share/icons/hicolor/"
+if [[ -f "$ROOT/packaging/linux/polkit/com.usbforge.write-media.policy" ]]; then
+  cp "$ROOT/packaging/linux/polkit/com.usbforge.write-media.policy" "$STAGE/share/polkit-1/actions/"
+fi
 cp "$ROOT/README.md" "$ROOT/LICENSE" "$STAGE/"
 mkdir -p "$STAGE/share/usbforge/ui"
 cp -a "$ROOT/ui/." "$STAGE/share/usbforge/ui/"
@@ -33,7 +37,8 @@ set -euo pipefail
 PREFIX="${PREFIX:-/usr/local}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 install -d "$PREFIX/bin" "$PREFIX/share/usbforge/docs" "$PREFIX/share/usbforge/scripts" \
-  "$PREFIX/share/usbforge/ui" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor"
+  "$PREFIX/share/usbforge/ui" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor" \
+  "$PREFIX/share/polkit-1/actions"
 install -m755 "$DIR/bin/"* "$PREFIX/bin/"
 install -m644 "$DIR/docs/"* "$PREFIX/share/usbforge/docs/"
 install -m755 "$DIR/scripts/"* "$PREFIX/share/usbforge/scripts/" 2>/dev/null || true
@@ -44,6 +49,9 @@ elif [[ -d "$DIR/ui" ]]; then
 fi
 install -m644 "$DIR/share/applications/"* "$PREFIX/share/applications/" 2>/dev/null || true
 cp -a "$DIR/share/icons/hicolor/." "$PREFIX/share/icons/hicolor/" 2>/dev/null || true
+if [[ -d "$DIR/share/polkit-1/actions" ]]; then
+  install -m644 "$DIR/share/polkit-1/actions/"* "$PREFIX/share/polkit-1/actions/" 2>/dev/null || true
+fi
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database -q "$PREFIX/share/applications" 2>/dev/null || true
 fi
@@ -53,6 +61,7 @@ fi
 echo "Installed USBForge to $PREFIX"
 echo "Open your app menu and search for: USBForge Builder / USBForge Live"
 echo "Or run: usbforge-builder"
+echo "USB writes auto-install missing tools (parted/dosfstools/rsync/wimtools) via pkexec/sudo."
 EOF
 chmod +x "$STAGE/install.sh" "$STAGE/scripts/"*.sh "$STAGE/bin/"*
 (

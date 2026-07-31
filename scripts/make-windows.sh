@@ -41,8 +41,10 @@ cp "$ROOT/docs/"* "$PORTABLE/docs/"
   fi
 )
 
-# NSIS installer
+# NSIS installer (keep APP_VERSION in sync with usbforge.h)
 echo "[win] Building NSIS installer..."
+sed -i "s/^!define APP_VERSION .*/!define APP_VERSION \"$VERSION\"/" \
+  "$ROOT/packaging/windows/usbforge.nsi"
 makensis -V2 "$ROOT/packaging/windows/usbforge.nsi"
-ls -lh "$OUT"/USBForge-*-windows-x64-setup.exe 2>/dev/null || ls -lh "$OUT"/
+ls -lh "$OUT/USBForge-${VERSION}-windows-x64-setup.exe"
 echo "[win] Done."

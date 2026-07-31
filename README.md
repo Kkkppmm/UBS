@@ -6,23 +6,26 @@
 
 | Tool | Role |
 |------|------|
-| `usbforge-builder` | Host GUI (Linux/WebKit): HTML/CSS/JS Media Creation Tool wizard |
+| `usbforge-builder` | Host GUI (Linux/WebKit): Media Creation wizard with review step + auto-deps |
 | `usbforge-live` | Live/boot GUI: USB probe, read-speed test, diagnostics, docs |
 | `USBForge.exe` | Windows writer + help (NSIS installer / portable zip) |
+| `scripts/write-media.sh` | Writes Windows/Linux ISOs to USB (auto-installs tools) |
 | `scripts/build-iso.sh` | Packages a GRUB-bootable ISO |
 
 ## Quick start (Linux)
 
 ```bash
-sudo apt-get install -y build-essential pkg-config libgtk-3-dev \
-    xorriso grub-common grub-pc-bin mtools
+sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev \
+    xorriso grub-common grub-pc-bin mtools parted dosfstools rsync wimtools pkexec
 
 make
 make smoke
 make iso                 # -> build/usbforge.iso
-./build/usbforge-builder
+./build/usbforge-builder   # WebKit + ui/builder (HTML/CSS/JS)
 ./build/usbforge-live
 ```
+
+USB writes **auto-install** missing tools (`parted`, `dosfstools`, `rsync`, `wimtools`) when you approve the admin prompt.
 
 ## Release packages
 

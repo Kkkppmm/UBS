@@ -9,43 +9,53 @@
 <body>
   <div id="app" class="app">
     <header class="header">
-      <div class="header-title">USBForge Setup</div>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <div class="header-title">USBForge Setup</div>
+          <div class="header-tag">Media Creation</div>
+        </div>
+      </div>
       <div class="header-ver" id="version">v—</div>
     </header>
 
     <nav class="steps" id="steps" aria-label="Wizard steps">
-      <div class="step on" data-step="0"><span class="dot"></span>Notices</div>
+      <div class="step on" data-step="0"><span class="num">1</span><span class="label">Notices</span></div>
       <div class="sep"></div>
-      <div class="step" data-step="1"><span class="dot"></span>Options</div>
+      <div class="step" data-step="1"><span class="num">2</span><span class="label">Task</span></div>
       <div class="sep"></div>
-      <div class="step" data-step="2"><span class="dot"></span>Media</div>
+      <div class="step" data-step="2"><span class="num">3</span><span class="label">Media</span></div>
       <div class="sep"></div>
-      <div class="step" data-step="3"><span class="dot"></span>Finish</div>
+      <div class="step" data-step="3"><span class="num">4</span><span class="label">Review</span></div>
+      <div class="sep"></div>
+      <div class="step" data-step="4"><span class="num">5</span><span class="label">Finish</span></div>
     </nav>
 
     <main class="content">
-      <!-- Notices -->
       <section class="page active" id="page-welcome">
         <h1 class="title reveal">Applicable notices and license terms</h1>
-        <p class="sub reveal d1">Review the following notices. Select Accept to continue.</p>
+        <p class="sub reveal d1">Review the notices below, then select Accept to continue.</p>
         <div class="license reveal d2" id="license" tabindex="0">
           <pre id="license-text"></pre>
         </div>
+        <p class="hint" id="license-hint">Scroll to the end of the notices to enable Accept.</p>
       </section>
 
-      <!-- Mode -->
       <section class="page" id="page-mode">
         <h1 class="title">What do you want to do?</h1>
-        <p class="sub">Select an option below, then choose Next to continue.</p>
+        <p class="sub">Choose one option, then select Next.</p>
         <button type="button" class="option on" id="opt-usb" data-mode="usb">
           <span class="radio" aria-hidden="true"></span>
+          <span class="glyph usb" aria-hidden="true"></span>
           <span class="opt-text">
             <strong>Create installation media (USB flash drive)</strong>
             <span>Write a Windows or Linux ISO you already have to a USB flash drive. Recommended for most people.</span>
+            <span class="pill">Auto-installs write tools if needed</span>
           </span>
         </button>
         <button type="button" class="option" id="opt-iso" data-mode="iso">
           <span class="radio" aria-hidden="true"></span>
+          <span class="glyph iso" aria-hidden="true"></span>
           <span class="opt-text">
             <strong>Create an ISO file</strong>
             <span>Build a new USBForge bootable ISO image to save on this PC (advanced).</span>
@@ -53,7 +63,6 @@
         </button>
       </section>
 
-      <!-- Media -->
       <section class="page" id="page-media">
         <h1 class="title" id="media-title">Choose which media to use</h1>
         <p class="sub" id="media-hint">Select the ISO image and the USB flash drive you want to use.</p>
@@ -73,25 +82,50 @@
           <div class="warn" id="usb-warn">Warning: Everything on the selected USB flash drive will be deleted.</div>
         </div>
 
+        <div class="checklist" id="media-check" aria-live="polite"></div>
         <button type="button" class="link" id="btn-verify">Verify ISO file</button>
       </section>
 
-      <!-- Progress -->
+      <section class="page" id="page-review">
+        <h1 class="title">Ready to create media</h1>
+        <p class="sub">Confirm these settings, then select Create.</p>
+        <div class="summary" id="summary">
+          <div class="sum-row"><span class="sum-k">Task</span><span class="sum-v" id="sum-task">—</span></div>
+          <div class="sum-row"><span class="sum-k">ISO</span><span class="sum-v" id="sum-iso">—</span></div>
+          <div class="sum-row" id="sum-usb-row"><span class="sum-k">USB drive</span><span class="sum-v" id="sum-usb">—</span></div>
+          <div class="sum-row"><span class="sum-k">Tools</span><span class="sum-v" id="sum-tools">Missing packages will be installed automatically</span></div>
+        </div>
+        <div class="warn" id="review-warn">Writing will erase the selected USB flash drive. Do not unplug it until Finish.</div>
+      </section>
+
       <section class="page" id="page-progress">
         <h1 class="title" id="progress-title">Creating your media</h1>
         <p class="sub" id="progress-sub">This might take a while — keep this window open until the process finishes.</p>
+        <ol class="phases" id="phases" aria-label="Progress phases">
+          <li class="phase" data-phase="prepare">Prepare</li>
+          <li class="phase" data-phase="tools">Tools</li>
+          <li class="phase" data-phase="write">Write</li>
+          <li class="phase" data-phase="done">Done</li>
+        </ol>
         <div class="activity" id="activity" hidden>Working…</div>
         <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
         <p class="status" id="status">Getting things ready…</p>
         <div class="banner" id="banner" hidden></div>
+        <div class="next-actions" id="next-actions" hidden>
+          <p class="next-title">Next steps</p>
+          <ul>
+            <li>Safely eject the USB flash drive when ready.</li>
+            <li>Boot from the drive to install or run the USB Lab.</li>
+            <li>Select Finish to create another, or Cancel to exit.</li>
+          </ul>
+        </div>
         <div class="warn" id="progress-warn">Do not remove the USB flash drive or close this window while Creating is in progress.</div>
-        <details class="details" open>
+        <details class="details">
           <summary>Details</summary>
           <pre class="log" id="log"></pre>
         </details>
       </section>
 
-      <!-- Help -->
       <section class="page" id="page-help">
         <h1 class="title">Help</h1>
         <div class="topic-row">
@@ -104,9 +138,7 @@
       </section>
     </main>
 
-    <footer class="footer" id="footer">
-      <!-- filled by JS per page -->
-    </footer>
+    <footer class="footer" id="footer"></footer>
   </div>
   <script src="app.js"></script>
 </body>

@@ -2,7 +2,7 @@
 #define USBFORGE_H
 
 #define USBFORGE_NAME        "USBForge"
-#define USBFORGE_VERSION     "1.5.2"
+#define USBFORGE_VERSION     "1.6.0"
 #define USBFORGE_TAGLINE     "Create, test, and install bootable USB media"
 #define USBFORGE_DOCS_DIR    "docs"
 #define USBFORGE_ISO_LABEL   "USBFORGE"
