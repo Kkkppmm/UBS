@@ -53,7 +53,7 @@ See **docs/packages.md** for install commands and distro notes.
 
 ## Android Companion
 
-Sideload `android/dist/USBForge-Companion-1.0.0.apk` (or build with `cd android && ./gradlew assembleRelease`).
+Sideload `android/dist/USBForge-Companion-1.0.1.apk` (or build with `cd android && ./gradlew assembleRelease`).
 
 - View USBForge release notes and download assets from GitHub
 - In-app Companion update checks

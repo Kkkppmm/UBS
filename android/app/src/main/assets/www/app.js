@@ -28,8 +28,19 @@
     const t = $("#toast");
     t.textContent = msg;
     t.hidden = false;
+    requestAnimationFrame(() => t.classList.add("show"));
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => { t.hidden = true; }, 2600);
+    toast._t = setTimeout(() => {
+      t.classList.remove("show");
+      setTimeout(() => { t.hidden = true; }, 280);
+    }, 2600);
+  }
+
+  function moveTabIndicator(name) {
+    const tabs = $$(".tab");
+    const idx = Math.max(0, tabs.findIndex((t) => t.dataset.tab === name));
+    const ind = $("#tab-indicator");
+    if (ind) ind.style.transform = `translateX(${idx * 100}%)`;
   }
 
   function saveSession() {
@@ -229,16 +240,17 @@
     const root = $("#posts");
     root.innerHTML = "";
     if (!posts.length) {
-      root.innerHTML = `<div class="card muted">No posts yet. Be the first to share something.</div>`;
+      root.innerHTML = `<div class="empty">No posts yet — be the first signal</div>`;
       return;
     }
-    posts.forEach((p) => {
+    posts.forEach((p, i) => {
       const el = document.createElement("article");
       el.className = "post";
+      el.style.animationDelay = `${Math.min(i, 8) * 40}ms`;
       el.innerHTML = `
         <span class="kind">${escapeHtml(p.kind || "share")}</span>
-        <h3 style="margin:0 0 6px;font-size:16px">${escapeHtml(p.title)}</h3>
-        <div>${escapeHtml(p.body)}</div>
+        <h3>${escapeHtml(p.title)}</h3>
+        <p class="body">${escapeHtml(p.body)}</p>
         <div class="meta">${escapeHtml(p.author || "User")} · ${new Date(p.created_at).toLocaleString()}</div>`;
       root.appendChild(el);
     });
@@ -389,6 +401,7 @@
   function showTab(name) {
     $$(".tab").forEach((t) => t.classList.toggle("on", t.dataset.tab === name));
     $$(".panel").forEach((p) => p.classList.toggle("on", p.id === "panel-" + name));
+    moveTabIndicator(name);
     if (name === "community") loadPosts();
     if (name === "updates") checkUpdates();
   }
@@ -397,7 +410,8 @@
     state.authMode = mode;
     $$(".seg-btn").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
     $("#auth-title").textContent = mode === "signup" ? "Create account" : "Sign in";
-    $("#auth-name").hidden = mode !== "signup";
+    const nameField = $("#auth-name-field");
+    if (nameField) nameField.hidden = mode !== "signup";
     $("#btn-auth").textContent = mode === "signup" ? "Sign up" : "Sign in";
   }
 
@@ -405,6 +419,7 @@
     loadSession();
     renderAccountChip();
     showTab("updates");
+    requestAnimationFrame(() => moveTabIndicator("updates"));
 
     $$(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
     $("#btn-account").addEventListener("click", () => showTab("account"));

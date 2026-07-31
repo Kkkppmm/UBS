@@ -19,7 +19,7 @@ cd android
 ./gradlew assembleRelease   # or assembleDebug
 ```
 
-Prebuilt (signed) APK: **`android/dist/USBForge-Companion-1.0.0.apk`**
+Prebuilt (signed) APK: **`android/dist/USBForge-Companion-1.0.1.apk`**
 
 Gradle outputs:
 
