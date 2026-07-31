@@ -337,7 +337,7 @@ static void do_verify(const char *iso)
 
 static void do_create(const char *mode, const char *iso, const char *usb)
 {
-    char *qi, *qu;
+    char *qi;
     char cmd[USBFORGE_MAX_PATH * 4];
     const char *script;
     int is_win;
@@ -382,6 +382,42 @@ static void do_create(const char *mode, const char *iso, const char *usb)
     }
 
     is_win = uf_iso_is_windows(iso);
+
+    /* Preflight: tools + privilege helper (no root yet) */
+    {
+        char check_cmd[USBFORGE_MAX_PATH * 4];
+        char check_out[USBFORGE_MAX_LOG];
+        const char *writer = uf_find_script("usbforge-write.sh");
+        const char *wmedia = uf_find_script("write-media.sh");
+        char *qscript, *qiso;
+        int rc;
+
+        if (!wmedia && !writer) {
+            ui_send_event("{\"event\":\"job_done\",\"ok\":false,\"message\":\"Could not find write-media.sh. Reinstall USBForge or run from the source tree.\"}");
+            return;
+        }
+        qiso = shell_single_quote(iso);
+        qscript = shell_single_quote(writer ? writer : wmedia);
+        snprintf(check_cmd, sizeof(check_cmd), "bash %s --check-deps %s 2>&1", qscript, qiso);
+        g_free(qscript);
+        g_free(qiso);
+        check_out[0] = '\0';
+        rc = uf_run_cmd(check_cmd, check_out, sizeof(check_out));
+        if (rc != 0) {
+            char *esc = json_escape(check_out[0] ? check_out :
+                "Missing tools to write USB media. Install: pkexec parted dosfstools rsync wimtools");
+            char *json = g_strdup_printf(
+                "{\"event\":\"job_done\",\"ok\":false,\"message\":\"USB write preflight failed.\\n\\n%s\"}",
+                esc);
+            ui_send_event(json);
+            g_free(esc);
+            g_free(json);
+            return;
+        }
+        if (check_out[0])
+            ui_log(check_out);
+    }
+
     confirm = gtk_message_dialog_new(
         GTK_WINDOW(app.window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
         "Everything on %s will be deleted.\n\n"
@@ -395,25 +431,37 @@ static void do_create(const char *mode, const char *iso, const char *usb)
         return;
     }
 
-    script = uf_find_script("write-media.sh");
-    qi = shell_single_quote(iso);
-    qu = shell_single_quote(usb);
-    if (script) {
-        char *qs = shell_single_quote(script);
-        snprintf(cmd, sizeof(cmd), "pkexec bash %s %s %s 2>&1", qs, qi, qu);
-        g_free(qs);
+    {
+        const char *writer = uf_find_script("usbforge-write.sh");
+        const char *wmedia = uf_find_script("write-media.sh");
+        char *qs, *qi2, *qu2;
+
+        qi2 = shell_single_quote(iso);
+        qu2 = shell_single_quote(usb);
+        if (writer) {
+            qs = shell_single_quote(writer);
+            snprintf(cmd, sizeof(cmd), "bash %s %s %s 2>&1", qs, qi2, qu2);
+            g_free(qs);
+        } else {
+            qs = shell_single_quote(wmedia);
+            snprintf(cmd, sizeof(cmd),
+                     "bash -c 'S=%s; I=%s; D=%s; "
+                     "if command -v pkexec >/dev/null; then pkexec /bin/bash \"$S\" \"$I\" \"$D\"; "
+                     "elif command -v sudo >/dev/null; then sudo /bin/bash \"$S\" \"$I\" \"$D\"; "
+                     "else echo \"[usbforge] ERROR: need pkexec or sudo\" >&2; exit 1; fi' 2>&1",
+                     qs, qi2, qu2);
+            g_free(qs);
+        }
+        g_free(qi2);
+        g_free(qu2);
         start_job(cmd,
                   is_win
                       ? "Windows USB media is ready. You can boot from this drive."
                       : "USB media is ready. You can boot from this drive.",
-                  "USB write failed. See log (needs pkexec; Windows ISOs need parted, dosfstools, rsync; large WIMs need wimtools).");
-    } else {
-        snprintf(cmd, sizeof(cmd),
-                 "pkexec dd if=%s of=%s bs=4M status=progress conv=fsync 2>&1", qi, qu);
-        start_job(cmd, "USB write finished (raw dd).", "USB write failed.");
+                  "USB write failed. See log above. Typical fixes: install pkexec (or sudo), "
+                  "parted, dosfstools, rsync; for large install.wim install wimtools; "
+                  "ensure the USB is plugged in and not mounted elsewhere.");
     }
-    g_free(qi);
-    g_free(qu);
 }
 
 static void do_check_updates(void)

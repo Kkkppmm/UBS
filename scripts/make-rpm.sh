@@ -29,8 +29,12 @@ install -m755 "$ROOT/scripts/usbforge-update.sh" "$PAYLOAD/usr/bin/usbforge-upda
 install -m644 "$ROOT/docs/"* "$PAYLOAD/usr/share/usbforge/docs/"
 install -m755 "$ROOT/scripts/build-iso.sh" "$PAYLOAD/usr/share/usbforge/scripts/"
 install -m755 "$ROOT/scripts/write-media.sh" "$PAYLOAD/usr/share/usbforge/scripts/"
+install -m755 "$ROOT/scripts/usbforge-write.sh" "$PAYLOAD/usr/share/usbforge/scripts/"
 install -m755 "$ROOT/scripts/live-autostart.sh" "$PAYLOAD/usr/share/usbforge/scripts/"
 install -m755 "$ROOT/scripts/usbforge-update.sh" "$PAYLOAD/usr/share/usbforge/scripts/"
+mkdir -p "$PAYLOAD/usr/share/polkit-1/actions"
+install -m644 "$ROOT/packaging/linux/polkit/com.usbforge.write-media.policy" \
+    "$PAYLOAD/usr/share/polkit-1/actions/"
 cp -a "$ROOT/ui/." "$PAYLOAD/usr/share/usbforge/ui/"
 install -m644 "$ROOT/packaging/linux/usbforge-builder.desktop" "$PAYLOAD/usr/share/applications/"
 install -m644 "$ROOT/packaging/linux/usbforge-live.desktop" "$PAYLOAD/usr/share/applications/"
